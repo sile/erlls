@@ -1,10 +1,14 @@
-use std::io::Read;
+use crate::error::ResponseError;
 
 #[derive(Debug)]
-pub struct Message {}
+pub struct Message {
+    jsonrpc: &'static str,
+}
 
 impl Message {
-    pub fn from_reader<R: Read>(_reader: &mut R) -> orfail::Result<Self> {
-        orfail::todo!()
+    pub const JSONRPC_VERSION: &'static str = "2.0";
+
+    pub fn from_bytes(buf: &[u8]) -> Result<Self, ResponseError> {
+        todo!()
     }
 }
