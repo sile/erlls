@@ -1,13 +1,16 @@
 use erlls::{header::Header, message::Message, server::LanguageServer};
 use orfail::OrFail;
-use std::io::Read;
+use serde::Serialize;
+use std::io::{Read, Write};
 
 fn main() -> orfail::Result<()> {
     env_logger::init();
 
     let mut server = LanguageServer::new();
     let stdin = std::io::stdin();
+    let stdout = std::io::stdout();
     let mut stdin = stdin.lock();
+    let mut stdout = stdout.lock();
     let mut content_buf = Vec::new();
     loop {
         let header = Header::from_reader(&mut stdin).or_fail()?;
@@ -22,13 +25,26 @@ fn main() -> orfail::Result<()> {
 
         match Message::from_bytes(&content_buf) {
             Ok(msg) => {
-                log::debug!("Received message: {:?}", msg);
+                log::debug!("Received message: {msg:?}");
                 server.handle_message(&msg).or_fail()?;
             }
             Err(e) => {
-                log::error!("Failed to parse message: {:?}", e);
-                todo!()
+                log::warn!("Invalid message: {e:?}");
+                write_message(&mut stdout, &e, &mut content_buf).or_fail()?;
             }
         }
     }
+}
+
+fn write_message<W: Write, T: Serialize>(
+    writer: &mut W,
+    msg: &T,
+    mut buf: &mut Vec<u8>,
+) -> orfail::Result<()> {
+    buf.clear();
+    serde_json::to_writer(&mut buf, msg).or_fail()?;
+    Header::new(buf.len()).to_writer(writer).or_fail()?;
+    writer.write_all(&buf).or_fail()?;
+    writer.flush().or_fail()?;
+    Ok(())
 }

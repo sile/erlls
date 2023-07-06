@@ -30,10 +30,43 @@ pub struct Message {
 }
 
 impl Message {
-    pub const JSONRPC_VERSION: &'static str = "2.0";
-
-    pub fn from_bytes(buf: &[u8]) -> Result<Self, ResponseError> {
-        let msg: Message = serde_json::from_slice(buf)?;
+    pub fn from_bytes(buf: &[u8]) -> Result<Self, ResponseMessage> {
+        #[derive(Deserialize)]
+        #[allow(dead_code)]
+        struct IdAndMethod {
+            jsonrpc: JsonrpcVersion,
+            #[serde(default)]
+            id: Option<RequestId>,
+            method: String,
+        }
+        let IdAndMethod { id, method, .. } = serde_json::from_slice(buf)
+            .map_err(ResponseError::from)
+            .map_err(|e| ResponseMessage::error(None, e))?;
         todo!()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RequestId {
+    Integer(i32),
+    String(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResponseMessage {
+    id: Option<RequestId>,
+
+    // result
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    error: Option<ResponseError>,
+}
+
+impl ResponseMessage {
+    pub fn error(id: Option<RequestId>, error: ResponseError) -> Self {
+        Self {
+            id,
+            error: Some(error),
+        }
     }
 }

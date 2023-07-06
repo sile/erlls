@@ -4,10 +4,10 @@ use serde::{Deserialize, Serialize};
 pub struct ResponseError {
     code: ErrorCode,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     message: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     data: Option<serde_json::Value>,
 }
 

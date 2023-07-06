@@ -1,5 +1,5 @@
 use orfail::{Failure, OrFail};
-use std::io::BufRead;
+use std::io::{BufRead, Write};
 
 #[derive(Debug, Clone)]
 pub struct Header {
@@ -41,5 +41,12 @@ impl Header {
             return Err(Failure::new().message("Missing Content-Length header"));
         }
         Ok(this)
+    }
+
+    pub fn to_writer<W: Write>(&self, writer: &mut W) -> orfail::Result<()> {
+        write!(writer, "Content-Length: {}\r\n", self.content_length).or_fail()?;
+        write!(writer, "Content-Type: {}\r\n", self.content_type).or_fail()?;
+        write!(writer, "\r\n").or_fail()?;
+        Ok(())
     }
 }
