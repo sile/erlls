@@ -15,6 +15,11 @@ fn main() -> orfail::Result<()> {
 
         content_buf.resize(header.content_length as usize, 0);
         stdin.read_exact(&mut content_buf).or_fail()?;
+        log::debug!(
+            "Received content JSON: {:?}",
+            std::str::from_utf8(&content_buf).or_fail()?
+        );
+
         match Message::from_bytes(&content_buf) {
             Ok(msg) => {
                 log::debug!("Received message: {:?}", msg);
