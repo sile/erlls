@@ -9,12 +9,30 @@ pub enum Message {
     Response(ResponseMessage),
 }
 
+impl Message {
+    // pub fn take_id_and_method(&mut self) -> (Option<RequestId>, Option<String>) {
+    //     match self {
+    //         Message::Request(x) => (x.id.take(), x.method.take()),
+    //         Message::Notification(x) => (x.id.take(), x.method.take()),
+    //         Message::Response(x) => (x.
+    //     }
+
+    pub fn method(&self) -> Option<&str> {
+        match self {
+            Message::Request(x) => Some(&x.method),
+            Message::Notification(x) => Some(&x.method),
+            Message::Response(_) => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestMessage {
     jsonrpc: JsonrpcVersion,
     pub id: RequestId,
     pub method: String,
-    pub params: Option<serde_json::Value>,
+    #[serde(default)]
+    pub params: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,3 +95,6 @@ pub enum RequestId {
     Integer(i32),
     String(String),
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct InitializeParams {}
