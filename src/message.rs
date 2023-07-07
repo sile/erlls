@@ -131,6 +131,12 @@ impl DocumentUri {
     }
 }
 
+impl std::fmt::Display for DocumentUri {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InitializeParams {
@@ -164,4 +170,10 @@ pub struct TextDocumentItem {
     pub language_id: String,
     pub version: i32,
     pub text: String,
+}
+
+impl TextDocumentItem {
+    pub fn is_erlang(&self) -> bool {
+        self.language_id == "erlang"
+    }
 }

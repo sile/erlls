@@ -118,8 +118,22 @@ impl LanguageServer {
 
     fn handle_did_open_text_document_notification(
         &mut self,
-        _params: DidOpenTextDocumentParams,
+        params: DidOpenTextDocumentParams,
     ) -> orfail::Result<()> {
+        log::info!(
+            "didOpen: uri={:?}, lang={}, version={}",
+            params.text_document.uri,
+            params.text_document.language_id,
+            params.text_document.version
+        );
+        if !params.text_document.is_erlang() {
+            log::warn!(
+                "Unsupported language: lang={}, uri={}",
+                params.text_document.language_id,
+                params.text_document.uri
+            );
+            return Ok(());
+        }
         Ok(())
     }
 }
