@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use orfail::OrFail;
+
 use crate::{
     error::ResponseError,
     message::{InitializeParams, Message, NotificationMessage, RequestMessage, ResponseMessage},
@@ -68,7 +70,7 @@ impl LanguageServer {
     ) -> Result<ResponseMessage, ResponseError> {
         log::debug!("{params:?}");
         let state = LanguageServerState {
-            root_dir: params.root_uri.to_existing_path_buf()?,
+            root_dir: params.root_uri.to_existing_path_buf().or_fail()?,
         };
         self.state = Some(state);
         todo!()

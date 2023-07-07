@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
-use crate::error::ResponseError;
+use crate::error::{ErrorCode, ResponseError};
+use orfail::OrFail;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -106,11 +107,15 @@ impl DocumentUri {
         &self.0
     }
 
-    pub fn to_existing_path_buf(&self) -> Result<PathBuf, ResponseError> {
-        if self.0.scheme() != "file" {
-            return Err(ResponseError::invalid_request());
-        }
-        todo!()
+    pub fn to_existing_path_buf(&self) -> orfail::Result<PathBuf> {
+        (self.0.scheme() == "file")
+            .or_fail()
+            .map_err(|e| e.code(ErrorCode::INVALID_PARAMS.as_u32()))?;
+        let path = PathBuf::from(self.0.path());
+        path.exists()
+            .or_fail()
+            .map_err(|e| e.code(ErrorCode::INVALID_PARAMS.as_u32()))?;
+        Ok(path)
     }
 }
 

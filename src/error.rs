@@ -1,3 +1,4 @@
+use orfail::Failure;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,6 +24,14 @@ impl ResponseError {
     pub fn invalid_request() -> Self {
         Self {
             code: ErrorCode::INVALID_REQUEST,
+            message: None,
+            data: None,
+        }
+    }
+
+    pub fn invalid_params() -> Self {
+        Self {
+            code: ErrorCode::INVALID_PARAMS,
             message: None,
             data: None,
         }
@@ -61,12 +70,24 @@ impl From<serde_json::Error> for ResponseError {
         let column = value.column();
         let category = value.classify();
         let error = Self::try_from(value)
-            .unwrap_or_else(|e| Self::invalid_request().message(&e.to_string()));
+            .unwrap_or_else(|e| Self::invalid_params().message(&e.to_string()));
         error.data(serde_json::json!({
             "line": line,
             "column": column,
             "category": format!("{category:?}"),
         }))
+    }
+}
+
+impl From<Failure> for ResponseError {
+    fn from(value: Failure) -> Self {
+        ResponseError {
+            code: value
+                .code
+                .map_or(ErrorCode::INVALID_PARAMS, |c| ErrorCode(c as i32)),
+            message: value.message,
+            data: serde_json::to_value(&value.backtrace).ok(),
+        }
     }
 }
 
@@ -83,5 +104,14 @@ impl ErrorCode {
     pub const REQUEST_FAILED: Self = Self(-32803);
     pub const PARSE_ERROR: Self = Self(-32700);
     pub const INVALID_REQUEST: Self = Self(-32600);
+    pub const METHOD_NOT_FOUND: Self = Self(-32601);
+    pub const INVALID_PARAMS: Self = Self(-32602);
+    pub const INTERNAL_ERROR: Self = Self(-32603);
     pub const SERVER_NOT_INITIALIZED: Self = Self(-32002);
+}
+
+impl ErrorCode {
+    pub const fn as_u32(self) -> u32 {
+        self.0 as u32
+    }
 }
