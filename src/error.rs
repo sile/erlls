@@ -20,6 +20,14 @@ impl ResponseError {
         }
     }
 
+    pub fn invalid_request() -> Self {
+        Self {
+            code: ErrorCode::INVALID_REQUEST,
+            message: None,
+            data: None,
+        }
+    }
+
     pub fn message(mut self, s: &str) -> Self {
         self.message = Some(s.to_owned());
         self
@@ -36,7 +44,8 @@ impl From<serde_json::Error> for ResponseError {
         let line = value.line();
         let column = value.column();
         let category = value.classify();
-        let error = Self::try_from(value).expect("bug");
+        let error = Self::try_from(value)
+            .unwrap_or_else(|e| Self::invalid_request().message(&e.to_string()));
         error.data(serde_json::json!({
             "line": line,
             "column": column,
@@ -56,4 +65,5 @@ pub struct ErrorCode(i32);
 
 impl ErrorCode {
     pub const PARSE_ERROR: Self = Self(-32700);
+    pub const INVALID_REQUEST: Self = Self(-32600);
 }

@@ -1,4 +1,6 @@
-use erlls::{header::Header, message::Message, server::LanguageServer};
+use erlls::{
+    error::ResponseError, header::Header, message::ResponseMessage, server::LanguageServer,
+};
 use orfail::OrFail;
 use serde::Serialize;
 use std::io::{Read, Write};
@@ -23,15 +25,18 @@ fn main() -> orfail::Result<()> {
             std::str::from_utf8(&content_buf).or_fail()?
         );
 
-        match Message::from_bytes(&content_buf) {
+        let response = match serde_json::from_slice(&content_buf) {
             Ok(msg) => {
                 log::debug!("Received message: {msg:?}");
-                server.handle_message(&msg).or_fail()?;
+                server.handle_message(&msg).or_fail()?
             }
             Err(e) => {
                 log::warn!("Invalid message: {e:?}");
-                write_message(&mut stdout, &e, &mut content_buf).or_fail()?;
+                Some(ResponseMessage::error(None, ResponseError::from(e)))
             }
+        };
+        if let Some(response) = response {
+            write_message(&mut stdout, &response, &mut content_buf).or_fail()?;
         }
     }
 }
