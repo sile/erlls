@@ -42,7 +42,8 @@ pub struct RequestMessage {
 pub struct NotificationMessage {
     jsonrpc: JsonrpcVersion,
     pub method: String,
-    pub params: Option<serde_json::Value>,
+    #[serde(default)]
+    pub params: serde_json::Value,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -60,12 +61,23 @@ pub struct ResponseMessage {
 }
 
 impl ResponseMessage {
-    pub fn error(id: Option<RequestId>, error: ResponseError) -> Self {
+    pub fn result<T: Serialize>(result: T) -> orfail::Result<Self> {
+        Ok(Self {
+            result: Some(serde_json::to_value(result).or_fail()?),
+            ..Self::default()
+        })
+    }
+
+    pub fn error(error: ResponseError) -> Self {
         Self {
-            id,
             error: Some(error),
             ..Self::default()
         }
+    }
+
+    pub fn id(mut self, id: RequestId) -> Self {
+        self.id = Some(id);
+        self
     }
 }
 
@@ -119,8 +131,22 @@ impl DocumentUri {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InitializeParams {
     pub root_uri: DocumentUri,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InitializeResult {}
+
+impl InitializeResult {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InitializedParams {}

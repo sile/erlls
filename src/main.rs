@@ -29,7 +29,7 @@ fn main() -> orfail::Result<()> {
             Ok(msg) => server.handle_message(msg),
             Err(e) => {
                 log::warn!("Invalid message: {e:?}");
-                Some(ResponseMessage::error(None, ResponseError::from(e)))
+                Some(ResponseMessage::error(ResponseError::from(e)))
             }
         };
         if let Some(response) = response {

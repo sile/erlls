@@ -1,10 +1,14 @@
 use std::path::PathBuf;
 
 use orfail::OrFail;
+use serde::Deserialize;
 
 use crate::{
     error::ResponseError,
-    message::{InitializeParams, Message, NotificationMessage, RequestMessage, ResponseMessage},
+    message::{
+        InitializeParams, InitializeResult, InitializedParams, Message, NotificationMessage,
+        RequestMessage, ResponseMessage,
+    },
 };
 
 #[derive(Debug)]
@@ -41,24 +45,45 @@ impl LanguageServer {
 
     fn handle_request(&mut self, msg: RequestMessage) -> ResponseMessage {
         if msg.method != "initialize" && self.state.is_none() {
-            return ResponseMessage::error(Some(msg.id), ResponseError::server_not_initialized());
+            return ResponseMessage::error(ResponseError::server_not_initialized()).id(msg.id);
+        }
+
+        fn deserialize_params<T>(params: serde_json::Value) -> Result<T, ResponseError>
+        where
+            T: for<'a> Deserialize<'a>,
+        {
+            serde_json::from_value(params).map_err(ResponseError::from)
         }
 
         let result = match msg.method.as_str() {
-            "initialize" => serde_json::from_value(msg.params)
-                .map_err(ResponseError::from)
+            "initialize" => deserialize_params(msg.params)
                 .and_then(|params| self.handle_initialize_request(params)),
             _ => {
+                // didOpen
                 todo!()
             }
         };
-        result.unwrap_or_else(|e| ResponseMessage::error(Some(msg.id), e))
+        result
+            .unwrap_or_else(|e| ResponseMessage::error(e))
+            .id(msg.id)
     }
 
     fn handle_notification(&mut self, msg: NotificationMessage) {
         if self.state.is_none() {
             log::warn!("Dropped a notification as the server is not initialized yet: {msg:?}");
             return;
+        }
+        let result = match msg.method.as_str() {
+            "initialized" => serde_json::from_value(msg.params)
+                .or_fail()
+                .and_then(|params| self.handle_initialized_notification(params).or_fail()),
+            _ => {
+                log::warn!("Unknown notification: {msg:?}");
+                Ok(())
+            }
+        };
+        if let Err(e) = result {
+            log::warn!("Failed to handle {:?} notification: reason={e}", msg.method);
         }
     }
 
@@ -73,6 +98,14 @@ impl LanguageServer {
             root_dir: params.root_uri.to_existing_path_buf().or_fail()?,
         };
         self.state = Some(state);
-        todo!()
+
+        Ok(ResponseMessage::result(InitializeResult::new()).or_fail()?)
+    }
+
+    fn handle_initialized_notification(
+        &mut self,
+        _params: InitializedParams,
+    ) -> orfail::Result<()> {
+        Ok(())
     }
 }
