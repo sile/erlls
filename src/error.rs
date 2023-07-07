@@ -28,6 +28,22 @@ impl ResponseError {
         }
     }
 
+    pub fn server_not_initialized() -> Self {
+        Self {
+            code: ErrorCode::SERVER_NOT_INITIALIZED,
+            message: Some("Server not initialized".to_owned()),
+            data: None,
+        }
+    }
+
+    pub fn request_failed() -> Self {
+        Self {
+            code: ErrorCode::REQUEST_FAILED,
+            message: None,
+            data: None,
+        }
+    }
+
     pub fn message(mut self, s: &str) -> Self {
         self.message = Some(s.to_owned());
         self
@@ -64,6 +80,8 @@ impl std::fmt::Display for ResponseError {
 pub struct ErrorCode(i32);
 
 impl ErrorCode {
+    pub const REQUEST_FAILED: Self = Self(-32803);
     pub const PARSE_ERROR: Self = Self(-32700);
     pub const INVALID_REQUEST: Self = Self(-32600);
+    pub const SERVER_NOT_INITIALIZED: Self = Self(-32002);
 }

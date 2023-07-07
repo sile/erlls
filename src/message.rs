@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::error::ResponseError;
 use serde::{Deserialize, Serialize};
 
@@ -97,4 +99,23 @@ pub enum RequestId {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct InitializeParams {}
+pub struct DocumentUri(url::Url);
+
+impl DocumentUri {
+    pub fn get(&self) -> &url::Url {
+        &self.0
+    }
+
+    pub fn to_existing_path_buf(&self) -> Result<PathBuf, ResponseError> {
+        if self.0.scheme() != "file" {
+            return Err(ResponseError::invalid_request());
+        }
+        todo!()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InitializeParams {
+    pub root_uri: DocumentUri,
+}

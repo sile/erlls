@@ -1,16 +1,23 @@
+use std::path::PathBuf;
+
 use crate::{
     error::ResponseError,
     message::{InitializeParams, Message, NotificationMessage, RequestMessage, ResponseMessage},
 };
 
 #[derive(Debug)]
+struct LanguageServerState {
+    root_dir: PathBuf,
+}
+
+#[derive(Debug, Default)]
 pub struct LanguageServer {
-    initialized: bool,
+    state: Option<LanguageServerState>,
 }
 
 impl LanguageServer {
     pub fn new() -> Self {
-        Self { initialized: false }
+        Self::default()
     }
 
     pub fn handle_message(&mut self, msg: Message) -> Option<ResponseMessage> {
@@ -31,8 +38,8 @@ impl LanguageServer {
     }
 
     fn handle_request(&mut self, msg: RequestMessage) -> ResponseMessage {
-        if msg.method != "initialized" && !self.initialized {
-            todo!();
+        if msg.method != "initialize" && self.state.is_none() {
+            return ResponseMessage::error(Some(msg.id), ResponseError::server_not_initialized());
         }
 
         let result = match msg.method.as_str() {
@@ -47,7 +54,7 @@ impl LanguageServer {
     }
 
     fn handle_notification(&mut self, msg: NotificationMessage) {
-        if !self.initialized {
+        if self.state.is_none() {
             log::warn!("Dropped a notification as the server is not initialized yet: {msg:?}");
             return;
         }
@@ -59,7 +66,11 @@ impl LanguageServer {
         &mut self,
         params: InitializeParams,
     ) -> Result<ResponseMessage, ResponseError> {
-        self.initialized = true;
+        log::debug!("{params:?}");
+        let state = LanguageServerState {
+            root_dir: params.root_uri.to_existing_path_buf()?,
+        };
+        self.state = Some(state);
         todo!()
     }
 }
