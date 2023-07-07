@@ -6,8 +6,8 @@ use serde::Deserialize;
 use crate::{
     error::ResponseError,
     message::{
-        InitializeParams, InitializeResult, InitializedParams, Message, NotificationMessage,
-        RequestMessage, ResponseMessage,
+        DidOpenTextDocumentParams, InitializeParams, InitializeResult, InitializedParams, Message,
+        NotificationMessage, RequestMessage, ResponseMessage,
     },
 };
 
@@ -59,7 +59,6 @@ impl LanguageServer {
             "initialize" => deserialize_params(msg.params)
                 .and_then(|params| self.handle_initialize_request(params)),
             _ => {
-                // didOpen
                 todo!()
             }
         };
@@ -77,8 +76,16 @@ impl LanguageServer {
             "initialized" => serde_json::from_value(msg.params)
                 .or_fail()
                 .and_then(|params| self.handle_initialized_notification(params).or_fail()),
-            _ => {
-                log::warn!("Unknown notification: {msg:?}");
+            "textDocument/didOpen" => {
+                serde_json::from_value(msg.params)
+                    .or_fail()
+                    .and_then(|params| {
+                        self.handle_did_open_text_document_notification(params)
+                            .or_fail()
+                    })
+            }
+            method => {
+                log::warn!("Unknown notification: {method:?}");
                 Ok(())
             }
         };
@@ -105,6 +112,13 @@ impl LanguageServer {
     fn handle_initialized_notification(
         &mut self,
         _params: InitializedParams,
+    ) -> orfail::Result<()> {
+        Ok(())
+    }
+
+    fn handle_did_open_text_document_notification(
+        &mut self,
+        _params: DidOpenTextDocumentParams,
     ) -> orfail::Result<()> {
         Ok(())
     }
