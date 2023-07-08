@@ -7,7 +7,7 @@ use crate::{
     error::ResponseError,
     message::{
         DidOpenTextDocumentParams, InitializeParams, InitializeResult, InitializedParams, Message,
-        NotificationMessage, RequestMessage, ResponseMessage,
+        NotificationMessage, RenameParams, RequestMessage, ResponseMessage,
     },
 };
 
@@ -58,8 +58,12 @@ impl LanguageServer {
         let result = match msg.method.as_str() {
             "initialize" => deserialize_params(msg.params)
                 .and_then(|params| self.handle_initialize_request(params)),
+            "textDocument/rename" => {
+                deserialize_params(msg.params).and_then(|params| self.handle_rename_request(params))
+            }
+
             _ => {
-                todo!()
+                todo!("handle_request: method={}", msg.method)
             }
         };
         result
@@ -107,6 +111,13 @@ impl LanguageServer {
         self.state = Some(state);
 
         Ok(ResponseMessage::result(InitializeResult::new()).or_fail()?)
+    }
+
+    fn handle_rename_request(
+        &mut self,
+        params: RenameParams,
+    ) -> Result<ResponseMessage, ResponseError> {
+        todo!()
     }
 
     fn handle_initialized_notification(

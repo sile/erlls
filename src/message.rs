@@ -209,3 +209,31 @@ impl TextDocumentItem {
         self.language_id == "erlang"
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameParams {
+    #[serde(flatten)]
+    pub text_document_position: TextDocumentPositionParams,
+    pub new_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextDocumentPositionParams {
+    pub text_document: TextDocumentIdentifier,
+    pub position: Position,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextDocumentIdentifier {
+    pub uri: DocumentUri,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Position {
+    pub line: u32,
+    pub character: u32,
+}
