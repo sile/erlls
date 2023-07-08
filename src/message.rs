@@ -143,13 +143,45 @@ pub struct InitializeParams {
     pub root_uri: DocumentUri,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InitializeResult {}
+pub struct InitializeResult {
+    pub capabilities: ServerCapabilities,
+    pub server_info: ServerInfo,
+}
 
 impl InitializeResult {
     pub fn new() -> Self {
-        Self {}
+        Self::default()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerInfo {
+    pub name: String,
+    pub version: String,
+}
+
+impl Default for ServerInfo {
+    fn default() -> Self {
+        Self {
+            name: "erlls".to_owned(),
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerCapabilities {
+    pub rename_provider: bool,
+}
+
+impl Default for ServerCapabilities {
+    fn default() -> Self {
+        Self {
+            rename_provider: true,
+        }
     }
 }
 
