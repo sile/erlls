@@ -5,9 +5,9 @@ use std::{collections::HashMap, path::PathBuf};
 use crate::{
     error::ResponseError,
     message::{
-        DidOpenTextDocumentParams, DocumentFormattingParams, DocumentUri, InitializeParams,
-        InitializeResult, InitializedParams, Message, NotificationMessage, RenameParams,
-        RequestMessage, ResponseMessage,
+        DidChangeTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams,
+        DocumentUri, InitializeParams, InitializeResult, InitializedParams, Message,
+        NotificationMessage, RenameParams, RequestMessage, ResponseMessage,
     },
 };
 
@@ -76,15 +76,12 @@ impl LanguageServer {
             "initialized" => serde_json::from_value(msg.params)
                 .or_fail()
                 .and_then(|params| state.handle_initialized_notification(params).or_fail()),
-            "textDocument/didOpen" => {
-                serde_json::from_value(msg.params)
-                    .or_fail()
-                    .and_then(|params| {
-                        state
-                            .handle_did_open_text_document_notification(params)
-                            .or_fail()
-                    })
-            }
+            "textDocument/didOpen" => serde_json::from_value(msg.params)
+                .or_fail()
+                .and_then(|params| state.handle_did_open_notification(params).or_fail()),
+            "textDocument/didChange" => serde_json::from_value(msg.params)
+                .or_fail()
+                .and_then(|params| state.handle_did_change_notification(params).or_fail()),
             method => {
                 log::warn!("Unknown notification: {method:?}");
                 Ok(())
@@ -152,7 +149,7 @@ impl LanguageServerState {
         Ok(())
     }
 
-    fn handle_did_open_text_document_notification(
+    fn handle_did_open_notification(
         &mut self,
         params: DidOpenTextDocumentParams,
     ) -> orfail::Result<()> {
@@ -179,6 +176,13 @@ impl LanguageServerState {
             },
         );
         Ok(())
+    }
+
+    fn handle_did_change_notification(
+        &mut self,
+        params: DidChangeTextDocumentParams,
+    ) -> orfail::Result<()> {
+        todo!()
     }
 }
 

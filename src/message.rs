@@ -197,6 +197,7 @@ impl Default for ServerInfo {
 pub struct ServerCapabilities {
     pub rename_provider: bool,
     pub document_formatting_provider: bool,
+    pub text_document_sync: TextDocumentSyncKind,
 }
 
 impl Default for ServerCapabilities {
@@ -204,6 +205,7 @@ impl Default for ServerCapabilities {
         Self {
             rename_provider: true,
             document_formatting_provider: true,
+            text_document_sync: TextDocumentSyncKind::INCREMENTAL,
         }
     }
 }
@@ -300,3 +302,17 @@ pub struct Range {
 pub struct DocumentFormattingParams {
     pub text_document: TextDocumentIdentifier,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TextDocumentSyncKind(u8);
+
+impl TextDocumentSyncKind {
+    pub const NONE: Self = Self(0);
+    pub const FULL: Self = Self(1);
+    pub const INCREMENTAL: Self = Self(2);
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DidChangeTextDocumentParams {}
