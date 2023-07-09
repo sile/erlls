@@ -182,7 +182,18 @@ impl LanguageServerState {
         &mut self,
         params: DidChangeTextDocumentParams,
     ) -> orfail::Result<()> {
-        todo!()
+        let doc = self
+            .documents
+            .get_mut(&params.text_document.uri)
+            .or_fail()?;
+        doc.version = Some(params.text_document.version);
+        for change in params.content_changes {
+            if let Some(range) = change.range {
+            } else {
+                doc.text = change.text;
+            }
+        }
+        Ok(())
     }
 }
 

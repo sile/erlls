@@ -198,6 +198,7 @@ pub struct ServerCapabilities {
     pub rename_provider: bool,
     pub document_formatting_provider: bool,
     pub text_document_sync: TextDocumentSyncKind,
+    pub position_encoding: PositionEncodingKind,
 }
 
 impl Default for ServerCapabilities {
@@ -206,6 +207,7 @@ impl Default for ServerCapabilities {
             rename_provider: true,
             document_formatting_provider: true,
             text_document_sync: TextDocumentSyncKind::INCREMENTAL,
+            position_encoding: PositionEncodingKind::Utf32,
         }
     }
 }
@@ -333,4 +335,15 @@ pub struct TextDocumentContentChangeEvent {
     #[serde(default)]
     pub range: Option<Range>,
     pub text: String,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum PositionEncodingKind {
+    #[serde(rename = "utf-8")]
+    Utf8,
+    #[default]
+    #[serde(rename = "utf-16")]
+    Utf16,
+    #[serde(rename = "utf-32")]
+    Utf32,
 }
