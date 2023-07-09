@@ -278,6 +278,13 @@ pub struct TextDocumentEdit {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct VersionedTextDocumentIdentifier {
+    pub uri: DocumentUri,
+    pub version: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OptionalVersionedTextDocumentIdentifier {
     pub uri: DocumentUri,
     pub version: Option<i32>,
@@ -315,4 +322,15 @@ impl TextDocumentSyncKind {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DidChangeTextDocumentParams {}
+pub struct DidChangeTextDocumentParams {
+    pub text_document: VersionedTextDocumentIdentifier,
+    pub content_changes: Vec<TextDocumentContentChangeEvent>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextDocumentContentChangeEvent {
+    #[serde(default)]
+    pub range: Option<Range>,
+    pub text: String,
+}
