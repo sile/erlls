@@ -55,6 +55,7 @@ impl LanguageServer {
                     .and_then(|params| state.handle_rename_request(params)),
                 "textDocument/formatting" => deserialize_params(msg.params)
                     .and_then(|params| state.handle_formatting_request(params)),
+                "shutdown" => state.handle_shutdown_request(),
                 _ => {
                     todo!("handle_request: method={}", msg.method)
                 }
@@ -140,6 +141,10 @@ impl LanguageServerState {
         params: RenameParams,
     ) -> Result<ResponseMessage, ResponseError> {
         todo!()
+    }
+
+    fn handle_shutdown_request(&mut self) -> Result<ResponseMessage, ResponseError> {
+        Ok(ResponseMessage::default())
     }
 
     fn handle_formatting_request(
