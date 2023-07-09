@@ -7,7 +7,8 @@ use crate::{
     message::{
         DidChangeTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams,
         DocumentUri, InitializeParams, InitializeResult, InitializedParams, Message,
-        NotificationMessage, RenameParams, RequestMessage, ResponseMessage,
+        NotificationMessage, Position, PositionEncodingKind, Range, RenameParams, RequestMessage,
+        ResponseMessage,
     },
 };
 
@@ -115,6 +116,12 @@ impl LanguageServer {
             .workspace_edit
             .document_changes
             .or_fail()?;
+        params
+            .capabilities
+            .general
+            .position_encodings
+            .contains(&PositionEncodingKind::Utf32)
+            .or_fail()?;
 
         self.state = Some(state);
         Ok(ResponseMessage::result(InitializeResult::new()).or_fail()?)
@@ -172,7 +179,7 @@ impl LanguageServerState {
             params.text_document.uri,
             Document {
                 version: Some(params.text_document.version),
-                text: params.text_document.text,
+                text: Text::new(&params.text_document.text),
             },
         );
         Ok(())
@@ -189,8 +196,9 @@ impl LanguageServerState {
         doc.version = Some(params.text_document.version);
         for change in params.content_changes {
             if let Some(range) = change.range {
+                doc.text.apply_change(range, &change.text).or_fail()?;
             } else {
-                doc.text = change.text;
+                doc.text = Text::new(&change.text);
             }
         }
         Ok(())
@@ -200,5 +208,95 @@ impl LanguageServerState {
 #[derive(Debug, Clone)]
 pub struct Document {
     pub version: Option<i32>,
-    pub text: String,
+    pub text: Text,
+}
+
+#[derive(Debug, Clone)]
+pub struct Text {
+    lines: Vec<String>,
+}
+
+impl Text {
+    pub fn new(text: &str) -> Self {
+        let lines = text.lines().map(|s| s.to_string()).collect();
+        Self { lines }
+    }
+
+    pub fn apply_change(&mut self, mut range: Range, text: &str) -> orfail::Result<()> {
+        while range.start.line + 1 < range.end.line {
+            self.lines.swap_remove(range.start.line + 1);
+            range.end.line -= 1;
+        }
+
+        let start_offset = self.utf8_column_offset(range.start).or_fail()?;
+        let end_offset = self.utf8_column_offset(range.end).or_fail()?;
+        let trailing;
+        if range.start.line == range.end.line {
+            let line = self.lines.get_mut(range.start.line).or_fail()?;
+            trailing = line.split_off(end_offset);
+            line.truncate(start_offset);
+        } else {
+            let line = self.lines.get_mut(range.start.line).or_fail()?;
+            line.truncate(start_offset);
+
+            let line = self.lines.get_mut(range.end.line).or_fail()?;
+            trailing = line.split_off(end_offset);
+            self.lines.swap_remove(range.end.line);
+        };
+
+        let mut lines = text.lines();
+        self.lines
+            .get_mut(range.start.line)
+            .or_fail()?
+            .push_str(lines.next().or_fail()?);
+
+        let mut end_line = range.start.line;
+        self.lines.splice(
+            range.start.line + 1..range.start.line + 1,
+            lines.map(|s| {
+                end_line += 1;
+                s.to_string()
+            }),
+        );
+
+        self.lines.get_mut(end_line).or_fail()?.push_str(&trailing);
+
+        Ok(())
+    }
+
+    fn utf8_column_offset(&self, position: Position) -> orfail::Result<usize> {
+        Ok(self
+            .lines
+            .get(position.line)
+            .or_fail()?
+            .chars()
+            .take(position.character)
+            .map(|c| c.len_utf8())
+            .sum())
+    }
+
+    pub fn to_string(&self) -> String {
+        self.lines.join("\n")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn apply_changes() -> orfail::Result<()> {
+        let mut text = Text::new("abc\ndef\nghi");
+        assert_eq!(text.to_string(), "abc\ndef\nghi");
+
+        text.apply_change(Range::new(Position::new(0, 1), Position::new(0, 2)), "xyz")
+            .or_fail()?;
+        assert_eq!(text.to_string(), "axyzc\ndef\nghi");
+
+        text.apply_change(Range::new(Position::new(0, 1), Position::new(2, 2)), "123")
+            .or_fail()?;
+        assert_eq!(text.to_string(), "a123i");
+
+        Ok(())
+    }
 }

@@ -142,6 +142,7 @@ pub struct InitializeParams {
 pub struct ClientCapabilities {
     #[serde(default)]
     pub workspace: WorkspaceCapabilitylies,
+    pub general: GeneralClientCapabilities,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -149,6 +150,13 @@ pub struct ClientCapabilities {
 pub struct WorkspaceCapabilitylies {
     #[serde(default)]
     pub workspace_edit: WorkspaceEditClientCapabilities,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeneralClientCapabilities {
+    #[serde(default)]
+    pub position_encodings: Vec<PositionEncodingKind>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -258,11 +266,17 @@ pub struct TextDocumentIdentifier {
     pub uri: DocumentUri,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Position {
-    pub line: u32,
-    pub character: u32,
+    pub line: usize,
+    pub character: usize,
+}
+
+impl Position {
+    pub fn new(line: usize, character: usize) -> Self {
+        Self { line, character }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -299,11 +313,17 @@ pub struct TextEdit {
     pub new_text: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Range {
     pub start: Position,
     pub end: Position,
+}
+
+impl Range {
+    pub fn new(start: Position, end: Position) -> Self {
+        Self { start, end }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
