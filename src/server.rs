@@ -113,6 +113,7 @@ impl LanguageServer {
         log::info!("Client capabilities: {:?}", params.capabilities);
 
         // Client capabilities check
+        // TODO: Use appropriate error code
         params
             .capabilities
             .workspace

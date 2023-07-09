@@ -1,8 +1,7 @@
-use std::{collections::BTreeMap, path::PathBuf};
-
 use crate::error::{ErrorCode, ResponseError};
 use orfail::OrFail;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -269,4 +268,34 @@ pub struct Position {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceEdit {}
+pub struct WorkspaceEdit {
+    pub document_changes: Vec<TextDocumentEdit>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextDocumentEdit {
+    pub text_document: OptionalVersionedTextDocumentIdentifier,
+    pub edits: Vec<TextEdit>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OptionalVersionedTextDocumentIdentifier {
+    pub uri: DocumentUri,
+    pub version: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextEdit {
+    pub range: Range,
+    pub new_text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Range {
+    pub start: Position,
+    pub end: Position,
+}
