@@ -104,12 +104,23 @@ impl LanguageServer {
         &mut self,
         params: InitializeParams,
     ) -> Result<ResponseMessage, ResponseError> {
-        log::debug!("{params:?}");
         let state = LanguageServerState {
             root_dir: params.root_uri.to_existing_path_buf().or_fail()?,
         };
-        self.state = Some(state);
 
+        log::info!("Client: {:?}", params.client_info);
+        log::info!("Root dir: {:?}", state.root_dir);
+        log::info!("Client capabilities: {:?}", params.capabilities);
+
+        // Client capabilities check
+        params
+            .capabilities
+            .workspace
+            .workspace_edit
+            .document_changes
+            .or_fail()?;
+
+        self.state = Some(state);
         Ok(ResponseMessage::result(InitializeResult::new()).or_fail()?)
     }
 

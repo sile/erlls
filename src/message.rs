@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
 
 use crate::error::{ErrorCode, ResponseError};
 use orfail::OrFail;
@@ -141,6 +141,29 @@ impl std::fmt::Display for DocumentUri {
 #[serde(rename_all = "camelCase")]
 pub struct InitializeParams {
     pub root_uri: DocumentUri,
+    pub client_info: Option<ClientInfo>,
+    pub capabilities: ClientCapabilities,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientCapabilities {
+    #[serde(default)]
+    pub workspace: WorkspaceCapabilitylies,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceCapabilitylies {
+    #[serde(default)]
+    pub workspace_edit: WorkspaceEditClientCapabilities,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceEditClientCapabilities {
+    #[serde(default)]
+    pub document_changes: bool,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -154,6 +177,12 @@ impl InitializeResult {
     pub fn new() -> Self {
         Self::default()
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClientInfo {
+    pub name: String,
+    pub version: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -237,3 +266,7 @@ pub struct Position {
     pub line: u32,
     pub character: u32,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceEdit {}
