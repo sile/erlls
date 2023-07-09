@@ -8,7 +8,7 @@ use crate::{
         DidChangeTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams,
         DocumentUri, InitializeParams, InitializeResult, InitializedParams, Message,
         NotificationMessage, Position, PositionEncodingKind, Range, RenameParams, RequestMessage,
-        ResponseMessage,
+        ResponseMessage, TextEdit,
     },
 };
 
@@ -146,7 +146,25 @@ impl LanguageServerState {
         &mut self,
         params: DocumentFormattingParams,
     ) -> Result<ResponseMessage, ResponseError> {
-        todo!()
+        let doc = self.documents.get(&params.text_document.uri).or_fail()?;
+        let text = doc.text.to_string();
+        let new_text =
+            match efmt::Options::default().format_text::<efmt::items::ModuleOrConfig>(&text) {
+                Err(e) => {
+                    return Err(ResponseError::request_failed().message(&e.to_string()));
+                }
+                Ok(new_text) => new_text,
+            };
+
+        // TODO: optimzie
+        let mut edits = Vec::new();
+        if text != new_text {
+            edits.push(TextEdit {
+                range: doc.text.range(),
+                new_text,
+            });
+        }
+        return Ok(ResponseMessage::result(edits).or_fail()?);
     }
 
     fn handle_initialized_notification(
@@ -189,17 +207,21 @@ impl LanguageServerState {
         &mut self,
         params: DidChangeTextDocumentParams,
     ) -> orfail::Result<()> {
+        log::info!("didChange: uri={:?}", params.text_document.uri);
         let doc = self
             .documents
             .get_mut(&params.text_document.uri)
             .or_fail()?;
         doc.version = Some(params.text_document.version);
+        log::info!("Before lines: {}", doc.text.lines.len());
         for change in params.content_changes {
+            log::info!("Change: range={:?}", change.range);
             if let Some(range) = change.range {
                 doc.text.apply_change(range, &change.text).or_fail()?;
             } else {
                 doc.text = Text::new(&change.text);
             }
+            log::info!("After lines: {}", doc.text.lines.len());
         }
         Ok(())
     }
@@ -218,19 +240,26 @@ pub struct Text {
 
 impl Text {
     pub fn new(text: &str) -> Self {
-        let lines = text.lines().map(|s| s.to_string()).collect();
+        // TODO: conssider newline character
+        let lines = text.split("\n").map(|s| s.to_string()).collect();
         Self { lines }
     }
 
     pub fn apply_change(&mut self, mut range: Range, text: &str) -> orfail::Result<()> {
+        log::info!(
+            "Apply change: range={:?}, lines={:?}",
+            range,
+            self.lines.len()
+        );
+        // TODO: optimize (use drain)
         while range.start.line + 1 < range.end.line {
-            self.lines.swap_remove(range.start.line + 1);
+            self.lines.remove(range.start.line + 1);
             range.end.line -= 1;
         }
 
         let start_offset = self.utf8_column_offset(range.start).or_fail()?;
         let end_offset = self.utf8_column_offset(range.end).or_fail()?;
-        let trailing;
+        let mut trailing = String::new();
         if range.start.line == range.end.line {
             let line = self.lines.get_mut(range.start.line).or_fail()?;
             trailing = line.split_off(end_offset);
@@ -239,25 +268,26 @@ impl Text {
             let line = self.lines.get_mut(range.start.line).or_fail()?;
             line.truncate(start_offset);
 
-            let line = self.lines.get_mut(range.end.line).or_fail()?;
-            trailing = line.split_off(end_offset);
-            self.lines.swap_remove(range.end.line);
+            if let Some(line) = self.lines.get_mut(range.end.line) {
+                trailing = line.split_off(end_offset);
+                self.lines.remove(range.end.line);
+            }
         };
 
-        let mut lines = text.lines();
-        self.lines
-            .get_mut(range.start.line)
-            .or_fail()?
-            .push_str(lines.next().or_fail()?);
+        let mut lines = text.split("\n"); // TODO: consider newline character
+        if let Some(line) = lines.next() {
+            self.lines
+                .get_mut(range.start.line)
+                .or_fail()?
+                .push_str(line);
+        }
 
-        let mut end_line = range.start.line;
+        let before_lines = self.lines.len();
         self.lines.splice(
             range.start.line + 1..range.start.line + 1,
-            lines.map(|s| {
-                end_line += 1;
-                s.to_string()
-            }),
+            lines.map(|s| s.to_string()),
         );
+        let end_line = range.start.line + self.lines.len() - before_lines;
 
         self.lines.get_mut(end_line).or_fail()?.push_str(&trailing);
 
@@ -265,10 +295,20 @@ impl Text {
     }
 
     fn utf8_column_offset(&self, position: Position) -> orfail::Result<usize> {
+        if position.character == 0 {
+            return Ok(0);
+        }
+
         Ok(self
             .lines
             .get(position.line)
-            .or_fail()?
+            .or_fail()
+            .map_err(|f| {
+                f.message(format!(
+                    "position={position:?}, text_range_end={:?}",
+                    self.range().end
+                ))
+            })?
             .chars()
             .take(position.character)
             .map(|c| c.len_utf8())
@@ -276,7 +316,12 @@ impl Text {
     }
 
     pub fn to_string(&self) -> String {
+        // TODO: conssider newline character
         self.lines.join("\n")
+    }
+
+    pub fn range(&self) -> Range {
+        Range::new(Position::new(0, 0), Position::new(self.lines.len(), 0))
     }
 }
 
@@ -285,7 +330,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn apply_changes() -> orfail::Result<()> {
+    fn apply_change_work() -> orfail::Result<()> {
         let mut text = Text::new("abc\ndef\nghi");
         assert_eq!(text.to_string(), "abc\ndef\nghi");
 
@@ -296,6 +341,11 @@ mod tests {
         text.apply_change(Range::new(Position::new(0, 1), Position::new(2, 2)), "123")
             .or_fail()?;
         assert_eq!(text.to_string(), "a123i");
+
+        let mut text = Text::new("111\n222\n333\n444\n555\n666");
+        text.apply_change(Range::new(Position::new(1, 1), Position::new(5, 0)), "")
+            .or_fail()?;
+        assert_eq!(text.to_string(), "111\n2666");
 
         Ok(())
     }
