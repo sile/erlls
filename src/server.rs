@@ -1,20 +1,15 @@
-use std::path::PathBuf;
-
 use orfail::OrFail;
 use serde::Deserialize;
+use std::{collections::HashMap, path::PathBuf};
 
 use crate::{
     error::ResponseError,
     message::{
-        DidOpenTextDocumentParams, InitializeParams, InitializeResult, InitializedParams, Message,
-        NotificationMessage, RenameParams, RequestMessage, ResponseMessage,
+        DidOpenTextDocumentParams, DocumentFormattingParams, DocumentUri, InitializeParams,
+        InitializeResult, InitializedParams, Message, NotificationMessage, RenameParams,
+        RequestMessage, ResponseMessage,
     },
 };
-
-#[derive(Debug)]
-struct LanguageServerState {
-    root_dir: PathBuf,
-}
 
 #[derive(Debug, Default)]
 pub struct LanguageServer {
@@ -44,10 +39,6 @@ impl LanguageServer {
     }
 
     fn handle_request(&mut self, msg: RequestMessage) -> ResponseMessage {
-        if msg.method != "initialize" && self.state.is_none() {
-            return ResponseMessage::error(ResponseError::server_not_initialized()).id(msg.id);
-        }
-
         fn deserialize_params<T>(params: serde_json::Value) -> Result<T, ResponseError>
         where
             T: for<'a> Deserialize<'a>,
@@ -55,36 +46,42 @@ impl LanguageServer {
             serde_json::from_value(params).map_err(ResponseError::from)
         }
 
-        let result = match msg.method.as_str() {
-            "initialize" => deserialize_params(msg.params)
-                .and_then(|params| self.handle_initialize_request(params)),
-            "textDocument/rename" => {
-                deserialize_params(msg.params).and_then(|params| self.handle_rename_request(params))
+        let result = if msg.method == "initialize" {
+            deserialize_params(msg.params).and_then(|params| self.handle_initialize_request(params))
+        } else if let Some(state) = self.state.as_mut() {
+            match msg.method.as_str() {
+                "textDocument/rename" => deserialize_params(msg.params)
+                    .and_then(|params| state.handle_rename_request(params)),
+                "textDocument/formatting" => deserialize_params(msg.params)
+                    .and_then(|params| state.handle_formatting_request(params)),
+                _ => {
+                    todo!("handle_request: method={}", msg.method)
+                }
             }
-
-            _ => {
-                todo!("handle_request: method={}", msg.method)
-            }
+        } else {
+            Err(ResponseError::server_not_initialized())
         };
+
         result
             .unwrap_or_else(|e| ResponseMessage::error(e))
             .id(msg.id)
     }
 
     fn handle_notification(&mut self, msg: NotificationMessage) {
-        if self.state.is_none() {
+        let Some(state) = self.state.as_mut() else {
             log::warn!("Dropped a notification as the server is not initialized yet: {msg:?}");
             return;
-        }
+        };
         let result = match msg.method.as_str() {
             "initialized" => serde_json::from_value(msg.params)
                 .or_fail()
-                .and_then(|params| self.handle_initialized_notification(params).or_fail()),
+                .and_then(|params| state.handle_initialized_notification(params).or_fail()),
             "textDocument/didOpen" => {
                 serde_json::from_value(msg.params)
                     .or_fail()
                     .and_then(|params| {
-                        self.handle_did_open_text_document_notification(params)
+                        state
+                            .handle_did_open_text_document_notification(params)
                             .or_fail()
                     })
             }
@@ -106,6 +103,7 @@ impl LanguageServer {
     ) -> Result<ResponseMessage, ResponseError> {
         let state = LanguageServerState {
             root_dir: params.root_uri.to_existing_path_buf().or_fail()?,
+            documents: HashMap::new(),
         };
 
         log::info!("Client: {:?}", params.client_info);
@@ -124,10 +122,25 @@ impl LanguageServer {
         self.state = Some(state);
         Ok(ResponseMessage::result(InitializeResult::new()).or_fail()?)
     }
+}
 
+#[derive(Debug)]
+struct LanguageServerState {
+    root_dir: PathBuf,
+    documents: HashMap<DocumentUri, Document>,
+}
+
+impl LanguageServerState {
     fn handle_rename_request(
         &mut self,
         params: RenameParams,
+    ) -> Result<ResponseMessage, ResponseError> {
+        todo!()
+    }
+
+    fn handle_formatting_request(
+        &mut self,
+        params: DocumentFormattingParams,
     ) -> Result<ResponseMessage, ResponseError> {
         todo!()
     }
@@ -157,6 +170,20 @@ impl LanguageServer {
             );
             return Ok(());
         }
+
+        self.documents.insert(
+            params.text_document.uri,
+            Document {
+                version: Some(params.text_document.version),
+                text: params.text_document.text,
+            },
+        );
         Ok(())
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Document {
+    pub version: Option<i32>,
+    pub text: String,
 }

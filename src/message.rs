@@ -12,13 +12,6 @@ pub enum Message {
 }
 
 impl Message {
-    // pub fn take_id_and_method(&mut self) -> (Option<RequestId>, Option<String>) {
-    //     match self {
-    //         Message::Request(x) => (x.id.take(), x.method.take()),
-    //         Message::Notification(x) => (x.id.take(), x.method.take()),
-    //         Message::Response(x) => (x.
-    //     }
-
     pub fn method(&self) -> Option<&str> {
         match self {
             Message::Request(x) => Some(&x.method),
@@ -203,12 +196,14 @@ impl Default for ServerInfo {
 #[serde(rename_all = "camelCase")]
 pub struct ServerCapabilities {
     pub rename_provider: bool,
+    pub document_formatting_provider: bool,
 }
 
 impl Default for ServerCapabilities {
     fn default() -> Self {
         Self {
             rename_provider: true,
+            document_formatting_provider: true,
         }
     }
 }
@@ -298,4 +293,10 @@ pub struct TextEdit {
 pub struct Range {
     pub start: Position,
     pub end: Position,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentFormattingParams {
+    pub text_document: TextDocumentIdentifier,
 }
