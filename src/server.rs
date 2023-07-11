@@ -5,10 +5,10 @@ use std::{collections::HashMap, path::PathBuf};
 use crate::{
     error::ResponseError,
     message::{
-        DidChangeTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams,
-        DocumentUri, InitializeParams, InitializeResult, InitializedParams, Message,
-        NotificationMessage, Position, PositionEncodingKind, Range, RenameParams, RequestMessage,
-        ResponseMessage, TextEdit,
+        DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+        DocumentFormattingParams, DocumentUri, InitializeParams, InitializeResult,
+        InitializedParams, Message, NotificationMessage, Position, PositionEncodingKind, Range,
+        RenameParams, RequestMessage, ResponseMessage, TextEdit,
     },
 };
 
@@ -84,6 +84,9 @@ impl LanguageServer {
             "textDocument/didChange" => serde_json::from_value(msg.params)
                 .or_fail()
                 .and_then(|params| state.handle_did_change_notification(params).or_fail()),
+            "textDocument/didClose" => serde_json::from_value(msg.params)
+                .or_fail()
+                .and_then(|params| state.handle_did_close_notification(params).or_fail()),
             method => {
                 log::warn!("Unknown notification: {method:?}");
                 Ok(())
@@ -205,6 +208,14 @@ impl LanguageServerState {
                 text: Text::new(&params.text_document.text),
             },
         );
+        Ok(())
+    }
+
+    fn handle_did_close_notification(
+        &mut self,
+        params: DidCloseTextDocumentParams,
+    ) -> orfail::Result<()> {
+        self.documents.remove(&params.text_document.uri);
         Ok(())
     }
 

@@ -232,6 +232,12 @@ pub struct DidOpenTextDocumentParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DidCloseTextDocumentParams {
+    pub text_document: TextDocumentItem,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TextDocumentItem {
     pub uri: DocumentUri,
     pub language_id: String,
