@@ -1,17 +1,17 @@
-use orfail::OrFail;
-use serde::Deserialize;
-use std::{collections::HashMap, path::PathBuf};
-
 use crate::{
-    document::{Document, Text},
+    document::{Document, EditingDocuments, Text},
     error::ResponseError,
     message::{
         DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-        DocumentFormattingParams, DocumentUri, InitializeParams, InitializeResult,
-        InitializedParams, Message, NotificationMessage, PositionEncodingKind, RenameParams,
-        RequestMessage, ResponseMessage, TextEdit,
+        DocumentFormattingParams, InitializeParams, InitializeResult, InitializedParams, Message,
+        NotificationMessage, PositionEncodingKind, RenameParams, RequestMessage, ResponseMessage,
+        TextEdit,
     },
+    rename_handler::RenameHandler,
 };
+use orfail::OrFail;
+use serde::Deserialize;
+use std::path::PathBuf;
 
 #[derive(Debug, Default)]
 pub struct LanguageServer {
@@ -106,9 +106,11 @@ impl LanguageServer {
         &mut self,
         params: InitializeParams,
     ) -> Result<ResponseMessage, ResponseError> {
+        let root_dir = params.root_uri.to_existing_path_buf().or_fail()?;
         let state = LanguageServerState {
-            root_dir: params.root_uri.to_existing_path_buf().or_fail()?,
-            documents: HashMap::new(),
+            root_dir: root_dir.clone(),
+            documents: EditingDocuments::default(),
+            rename_handler: RenameHandler::new(root_dir),
         };
 
         log::info!("Client: {:?}", params.client_info);
@@ -138,7 +140,8 @@ impl LanguageServer {
 #[derive(Debug)]
 struct LanguageServerState {
     root_dir: PathBuf,
-    documents: HashMap<DocumentUri, Document>,
+    documents: EditingDocuments,
+    rename_handler: RenameHandler,
 }
 
 impl LanguageServerState {
@@ -146,7 +149,7 @@ impl LanguageServerState {
         &mut self,
         params: RenameParams,
     ) -> Result<ResponseMessage, ResponseError> {
-        todo!()
+        self.rename_handler.handle(params)
     }
 
     fn handle_shutdown_request(&mut self) -> Result<ResponseMessage, ResponseError> {
@@ -249,6 +252,7 @@ impl LanguageServerState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::message::{Position, Range};
 
     #[test]
     fn apply_change_work() -> orfail::Result<()> {

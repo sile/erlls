@@ -1,5 +1,27 @@
-use crate::message::{Position, Range};
+use crate::message::{DocumentUri, Position, Range};
 use orfail::OrFail;
+use std::collections::HashMap;
+
+#[derive(Debug, Default, Clone)]
+pub struct EditingDocuments(HashMap<DocumentUri, Document>);
+
+impl EditingDocuments {
+    pub fn get(&self, uri: &DocumentUri) -> Option<&Document> {
+        self.0.get(uri)
+    }
+
+    pub fn get_mut(&mut self, uri: &DocumentUri) -> Option<&mut Document> {
+        self.0.get_mut(uri)
+    }
+
+    pub fn insert(&mut self, uri: DocumentUri, document: Document) {
+        self.0.insert(uri, document);
+    }
+
+    pub fn remove(&mut self, uri: &DocumentUri) {
+        self.0.remove(uri);
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Document {
