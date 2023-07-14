@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 efmt = "0.14.1"
 env_logger = "0.10.0"
+erl_tokenize = "0.5.0"
 log = { version = "0.4.19", features = ["release_max_level_debug"] }
 orfail = { version = "0.1.3", features = ["serde"] }
 serde = { version = "1.0.164", features = ["derive"] }

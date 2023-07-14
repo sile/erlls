@@ -149,7 +149,7 @@ impl LanguageServerState {
         &mut self,
         params: RenameParams,
     ) -> Result<ResponseMessage, ResponseError> {
-        self.rename_handler.handle(params)
+        self.rename_handler.handle(params, &self.documents)
     }
 
     fn handle_shutdown_request(&mut self) -> Result<ResponseMessage, ResponseError> {

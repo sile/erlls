@@ -252,6 +252,7 @@ version = "0.1.0"
 dependencies = [
  "efmt",
  "env_logger",
+ "erl_tokenize",
  "log",
  "orfail",
  "serde",
