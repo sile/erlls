@@ -118,7 +118,7 @@ impl FindRenameTarget for efmt::items::types::BaseType {
     fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
         match self {
             Self::Mfargs(x) => x.find_rename_target_if_contains(position),
-            Self::List(_) => todo!(),
+            Self::List(x) => x.find_rename_target_if_contains(position),
             Self::Tuple(x) => x.find_rename_target_if_contains(position),
             Self::Map(_) => todo!(),
             Self::Record(_) => todo!(),
@@ -191,6 +191,13 @@ impl FindRenameTarget for efmt::items::types::TupleType {
         self.items()
             .1
             .find_map(|item| item.find_rename_target_if_contains(position))
+    }
+}
+
+impl FindRenameTarget for efmt::items::types::ListType {
+    fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
+        self.item_type()
+            .and_then(|item| item.find_rename_target_if_contains(position))
     }
 }
 
@@ -267,6 +274,18 @@ foo(A) ->
                     assert_eq!(target.name, "A");
                     assert_eq!(target.kind, RenamableItemKind::Variable);
                     assert_eq!(target.position.offset(), offset(54).offset());
+                }
+                58 => {
+                    let target = tree.find_rename_target(offset(i)).or_fail()?;
+                    assert_eq!(target.name, "b");
+                    assert_eq!(target.kind, RenamableItemKind::ModuleName);
+                    assert_eq!(target.position.offset(), offset(58).offset());
+                }
+                60 => {
+                    let target = tree.find_rename_target(offset(i)).or_fail()?;
+                    assert_eq!(target.name, "b");
+                    assert_eq!(target.kind, RenamableItemKind::TypeName);
+                    assert_eq!(target.position.offset(), offset(60).offset());
                 }
                 _ => {
                     assert_eq!(None, tree.find_rename_target(offset(i)));
