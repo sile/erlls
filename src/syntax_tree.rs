@@ -52,22 +52,42 @@ impl FindRenameTarget for efmt::items::Module {
 impl FindRenameTarget for efmt::items::Form {
     fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
         match self.get() {
-            efmt::items::forms::Form::Module(module) => {
-                if module.module_name().contains(position) {
+            efmt::items::forms::Form::Module(form) => {
+                if form.module_name().contains(position) {
                     let target = RenameTarget{
-                        name: module.module_name().value().to_owned(),
+                        name: form.module_name().value().to_owned(),
                         kind: RenamableItemKind::ModuleName,
-                        position: module.module_name().start_position(),
+                        position: form.module_name().start_position(),
                     };
                     return Some(target)
                 }
+            }
+            efmt::items::forms::Form::TypeDecl(form) => {
+                if form.type_name().contains(position) {
+                    let target = RenameTarget{
+                        name: form.type_name().value().to_owned(),
+                        kind: RenamableItemKind::TypeName,
+                        position: form.type_name().start_position(),
+                    };
+                    return Some(target)
+                }
+                for param in form.params() {
+                    if param.contains(position) {
+                        let target = RenameTarget{
+                            name: param.value().to_owned(),
+                            kind: RenamableItemKind::Variable,
+                            position: param.start_position(),
+                        };
+                        return Some(target)
+                    }
+                }
+                return form.type_value().find_rename_target_if_contains(position);
             }
             _ => {}
     // Define(DefineDirective),
     // Include(IncludeDirective),
     // FunSpec(FunSpec),
     // FunDecl(FunDecl),
-    // TypeDecl(TypeDecl),
     // RecordDecl(RecordDecl),
     // Export(ExportAttr),
     // Module(ModuleAttr),
@@ -78,7 +98,103 @@ impl FindRenameTarget for efmt::items::Form {
     }
 }
 
-#[derive(Debug, Clone)]
+impl FindRenameTarget for efmt::items::Type {
+    fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
+        self.children()
+            .find_map(|child| child.find_rename_target_if_contains(position))
+    }
+}
+
+impl FindRenameTarget for efmt::items::types::NonUnionType {
+    fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
+        match self {
+            Self::Base(x) => x.find_rename_target_if_contains(position),
+            Self::BinaryOp(x) => x.find_rename_target_if_contains(position),
+        }
+    }
+}
+
+impl FindRenameTarget for efmt::items::types::BaseType {
+    fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
+        match self {
+            Self::Mfargs(x) => x.find_rename_target_if_contains(position),
+            Self::List(_) => todo!(),
+            Self::Tuple(x) => x.find_rename_target_if_contains(position),
+            Self::Map(_) => todo!(),
+            Self::Record(_) => todo!(),
+            Self::Function(_) => todo!(),
+            Self::Parenthesized(_) => todo!(),
+            Self::Annotated(_) => todo!(),
+            Self::Literal(x) => x.find_rename_target_if_contains(position),
+            Self::Bitstring(_) | Self::UnaryOp(_) => None,
+        }
+    }
+}
+
+impl FindRenameTarget for efmt::items::types::BinaryOpType {
+    fn find_rename_target(&self, _position: Position) -> Option<RenameTarget> {
+        // As binary op types are only applied to integer types, they are never renamed.
+        None
+    }
+}
+
+impl FindRenameTarget for efmt::items::types::LiteralType {
+    fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
+        match self {
+            Self::Variable(x) => {
+                if x.contains(position) {
+                    let target = RenameTarget {
+                        name: x.value().to_owned(),
+                        kind: RenamableItemKind::Variable,
+                        position: x.start_position(),
+                    };
+                    return Some(target);
+                }
+            }
+            Self::Atom(_) | Self::Char(_) | Self::Integer(_) => {}
+        }
+        None
+    }
+}
+
+impl FindRenameTarget for efmt::items::types::MfargsType {
+    fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
+        if let Some(module_name) = self.module_name() {
+            if module_name.contains(position) {
+                let target = RenameTarget {
+                    name: module_name.value().to_owned(),
+                    kind: RenamableItemKind::ModuleName,
+                    position: module_name.start_position(),
+                };
+                return Some(target);
+            }
+        }
+        if self.type_name().contains(position) {
+            let target = RenameTarget {
+                name: self.type_name().value().to_owned(),
+                kind: RenamableItemKind::TypeName,
+                position: self.type_name().start_position(),
+            };
+            return Some(target);
+        }
+        for arg in self.args() {
+            if let Some(target) = arg.find_rename_target_if_contains(position) {
+                return Some(target);
+            }
+        }
+        None
+    }
+}
+
+impl FindRenameTarget for efmt::items::types::TupleType {
+    fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
+        self.items()
+            .1
+            .find_map(|item| item.find_rename_target_if_contains(position))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenameTarget {
     pub name: String,
     pub kind: RenamableItemKind,
@@ -101,17 +217,60 @@ mod tests {
     use super::*;
 
     #[test]
-    fn find_rename_target_module_name_works() -> orfail::Result<()> {
-        let text = "-module(foo).";
+    fn find_rename_target_works() -> orfail::Result<()> {
+        let text = r#"-module(foo).
+
+-type foo() :: any().
+-type bar(A) :: {A, [b:b()], c}.
+
+-spec foo(foo:foo()) -> ok.
+foo(A) ->
+    B = A + 2,
+    io:format("B=~p~n", [B]),
+    ok.
+"#;
         let tree = SyntaxTree::parse(text.to_owned()).or_fail()?;
         for i in 0..text.len() {
-            if (8..=10).contains(&i) {
-                let target = tree.find_rename_target(offset(i)).or_fail()?;
-                assert_eq!(target.name, "foo");
-                assert_eq!(target.kind, RenamableItemKind::ModuleName);
-                assert_eq!(target.position.offset(), offset(8).offset());
-            } else {
-                assert!(tree.find_rename_target(offset(i)).is_none());
+            match i {
+                8..=10 => {
+                    let target = tree.find_rename_target(offset(i)).or_fail()?;
+                    assert_eq!(target.name, "foo");
+                    assert_eq!(target.kind, RenamableItemKind::ModuleName);
+                    assert_eq!(target.position.offset(), offset(8).offset());
+                }
+                21..=23 => {
+                    let target = tree.find_rename_target(offset(i)).or_fail()?;
+                    assert_eq!(target.name, "foo");
+                    assert_eq!(target.kind, RenamableItemKind::TypeName);
+                    assert_eq!(target.position.offset(), offset(21).offset());
+                }
+                30..=32 => {
+                    let target = tree.find_rename_target(offset(i)).or_fail()?;
+                    assert_eq!(target.name, "any");
+                    assert_eq!(target.kind, RenamableItemKind::TypeName);
+                    assert_eq!(target.position.offset(), offset(30).offset());
+                }
+                43..=45 => {
+                    let target = tree.find_rename_target(offset(i)).or_fail()?;
+                    assert_eq!(target.name, "bar");
+                    assert_eq!(target.kind, RenamableItemKind::TypeName);
+                    assert_eq!(target.position.offset(), offset(43).offset());
+                }
+                47 => {
+                    let target = tree.find_rename_target(offset(i)).or_fail()?;
+                    assert_eq!(target.name, "A");
+                    assert_eq!(target.kind, RenamableItemKind::Variable);
+                    assert_eq!(target.position.offset(), offset(47).offset());
+                }
+                54 => {
+                    let target = tree.find_rename_target(offset(i)).or_fail()?;
+                    assert_eq!(target.name, "A");
+                    assert_eq!(target.kind, RenamableItemKind::Variable);
+                    assert_eq!(target.position.offset(), offset(54).offset());
+                }
+                _ => {
+                    assert_eq!(None, tree.find_rename_target(offset(i)));
+                }
             }
         }
         Ok(())

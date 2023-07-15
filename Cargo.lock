@@ -189,8 +189,6 @@ dependencies = [
 [[package]]
 name = "efmt"
 version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "327ac0a02d338b539636a9dc6a8851ff981bf159af2cb673db7e5e5595adb23d"
 dependencies = [
  "anyhow",
  "clap",
@@ -208,8 +206,6 @@ dependencies = [
 [[package]]
 name = "efmt_derive"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc062d403dbf39f066ed695e65b1bd0e2fa62359151d9d35612aae950a80c1d3"
 dependencies = [
  "proc-macro2",
  "quote",
