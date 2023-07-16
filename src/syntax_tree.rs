@@ -120,11 +120,11 @@ impl FindRenameTarget for efmt::items::types::BaseType {
             Self::Mfargs(x) => x.find_rename_target_if_contains(position),
             Self::List(x) => x.find_rename_target_if_contains(position),
             Self::Tuple(x) => x.find_rename_target_if_contains(position),
-            Self::Map(_) => todo!(),
-            Self::Record(_) => todo!(),
-            Self::Function(_) => todo!(),
-            Self::Parenthesized(_) => todo!(),
-            Self::Annotated(_) => todo!(),
+            Self::Map(x) => x.find_rename_target_if_contains(position),
+            Self::Record(x) => x.find_rename_target_if_contains(position),
+            Self::Function(x) => x.find_rename_target_if_contains(position),
+            Self::Parenthesized(x) => x.get().find_rename_target_if_contains(position),
+            Self::Annotated(x) => x.find_rename_target_if_contains(position),
             Self::Literal(x) => x.find_rename_target_if_contains(position),
             Self::Bitstring(_) | Self::UnaryOp(_) => None,
         }
@@ -135,6 +135,66 @@ impl FindRenameTarget for efmt::items::types::BinaryOpType {
     fn find_rename_target(&self, _position: Position) -> Option<RenameTarget> {
         // As binary op types are only applied to integer types, they are never renamed.
         None
+    }
+}
+
+impl FindRenameTarget for efmt::items::types::AnnotatedVariableType {
+    fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
+        if self.variable().contains(position) {
+            let target = RenameTarget {
+                name: self.variable().value().to_owned(),
+                kind: RenamableItemKind::Variable,
+                position: self.variable().start_position(),
+            };
+            return Some(target);
+        }
+        self.ty().find_rename_target_if_contains(position)
+    }
+}
+
+impl FindRenameTarget for efmt::items::types::FunctionType {
+    fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
+        for param in self.params() {
+            if let Some(target) = param.find_rename_target_if_contains(position) {
+                return Some(target);
+            }
+        }
+        self.return_type()
+            .and_then(|x| x.find_rename_target_if_contains(position))
+    }
+}
+
+impl FindRenameTarget for efmt::items::types::RecordType {
+    fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
+        if self.name().contains(position) {
+            let target = RenameTarget {
+                name: self.name().value().to_owned(),
+                kind: RenamableItemKind::RecordName,
+                position: self.name().start_position(),
+            };
+            return Some(target);
+        }
+        self.fields().find_map(|(name, field)| {
+            if name.contains(position) {
+                let target = RenameTarget {
+                    name: name.value().to_owned(),
+                    kind: RenamableItemKind::RecordFieldName,
+                    position: name.start_position(),
+                };
+                Some(target)
+            } else {
+                field.find_rename_target_if_contains(position)
+            }
+        })
+    }
+}
+
+impl FindRenameTarget for efmt::items::types::MapType {
+    fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
+        self.items().find_map(|(k, v)| {
+            k.find_rename_target_if_contains(position)
+                .or_else(|| v.find_rename_target_if_contains(position))
+        })
     }
 }
 
@@ -215,6 +275,7 @@ pub enum RenamableItemKind {
     FunctionName,
     MacroName,
     RecordName,
+    RecordFieldName,
     FieldName,
     Variable,
 }
