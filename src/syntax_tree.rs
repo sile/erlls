@@ -458,6 +458,18 @@ mod tests {
 
     #[test]
     fn find_rename_target_works() -> orfail::Result<()> {
+        macro_rules! assert_rename_target {
+            ($start:expr, $end:expr, $name:expr, $kind:expr, $i:expr, $tree:expr) => {
+                if ($start..=$end).contains(&$i) {
+                    let target = $tree.find_rename_target(offset($i)).or_fail()?;
+                    assert_eq!(target.name, $name);
+                    assert_eq!(target.kind, $kind);
+                    assert_eq!(target.position.offset(), offset($start).offset());
+                    continue;
+                }
+            };
+        }
+
         let text = r#"-module(foo).
 
 -type foo() :: any().
@@ -471,119 +483,28 @@ foo(A) ->
 "#;
         let tree = SyntaxTree::parse(text.to_owned()).or_fail()?;
         for i in 0..text.len() {
-            match i {
-                8..=10 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "foo");
-                    assert_eq!(target.kind, RenamableItemKind::ModuleName);
-                    assert_eq!(target.position.offset(), offset(8).offset());
-                }
-                21..=23 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "foo");
-                    assert_eq!(target.kind, RenamableItemKind::TypeName);
-                    assert_eq!(target.position.offset(), offset(21).offset());
-                }
-                30..=32 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "any");
-                    assert_eq!(target.kind, RenamableItemKind::TypeName);
-                    assert_eq!(target.position.offset(), offset(30).offset());
-                }
-                43..=45 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "bar");
-                    assert_eq!(target.kind, RenamableItemKind::TypeName);
-                    assert_eq!(target.position.offset(), offset(43).offset());
-                }
-                47 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "A");
-                    assert_eq!(target.kind, RenamableItemKind::Variable);
-                    assert_eq!(target.position.offset(), offset(47).offset());
-                }
-                54 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "A");
-                    assert_eq!(target.kind, RenamableItemKind::Variable);
-                    assert_eq!(target.position.offset(), offset(54).offset());
-                }
-                58 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "b");
-                    assert_eq!(target.kind, RenamableItemKind::ModuleName);
-                    assert_eq!(target.position.offset(), offset(58).offset());
-                }
-                60 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "b");
-                    assert_eq!(target.kind, RenamableItemKind::TypeName);
-                    assert_eq!(target.position.offset(), offset(60).offset());
-                }
-                77..=79 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "foo");
-                    assert_eq!(target.kind, RenamableItemKind::FunctionName);
-                    assert_eq!(target.position.offset(), offset(77).offset());
-                }
-                81..=83 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "foo");
-                    assert_eq!(target.kind, RenamableItemKind::ModuleName);
-                    assert_eq!(target.position.offset(), offset(81).offset());
-                }
-                85..=87 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "foo");
-                    assert_eq!(target.kind, RenamableItemKind::TypeName);
-                    assert_eq!(target.position.offset(), offset(85).offset());
-                }
-                99..=101 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "foo");
-                    assert_eq!(target.kind, RenamableItemKind::FunctionName);
-                    assert_eq!(target.position.offset(), offset(99).offset());
-                }
-                103 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "A");
-                    assert_eq!(target.kind, RenamableItemKind::Variable);
-                    assert_eq!(target.position.offset(), offset(i).offset());
-                }
-                113 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "B");
-                    assert_eq!(target.kind, RenamableItemKind::Variable);
-                    assert_eq!(target.position.offset(), offset(i).offset());
-                }
-                117 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "A");
-                    assert_eq!(target.kind, RenamableItemKind::Variable);
-                    assert_eq!(target.position.offset(), offset(i).offset());
-                }
-                128..=129 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "io");
-                    assert_eq!(target.kind, RenamableItemKind::ModuleName);
-                    assert_eq!(target.position.offset(), offset(128).offset());
-                }
-                131..=136 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "format");
-                    assert_eq!(target.kind, RenamableItemKind::FunctionName);
-                    assert_eq!(target.position.offset(), offset(131).offset());
-                }
-                149 => {
-                    let target = tree.find_rename_target(offset(i)).or_fail()?;
-                    assert_eq!(target.name, "B");
-                    assert_eq!(target.kind, RenamableItemKind::Variable);
-                    assert_eq!(target.position.offset(), offset(i).offset());
-                }
-                _ => {
-                    assert_eq!(None, tree.find_rename_target(offset(i)));
-                }
-            }
+            use RenamableItemKind::*;
+
+            assert_rename_target!(8, 10, "foo", ModuleName, i, tree);
+            assert_rename_target!(21, 23, "foo", TypeName, i, tree);
+            assert_rename_target!(30, 32, "any", TypeName, i, tree);
+            assert_rename_target!(43, 45, "bar", TypeName, i, tree);
+            assert_rename_target!(47, 47, "A", Variable, i, tree);
+            assert_rename_target!(54, 54, "A", Variable, i, tree);
+            assert_rename_target!(58, 58, "b", ModuleName, i, tree);
+            assert_rename_target!(60, 60, "b", TypeName, i, tree);
+            assert_rename_target!(77, 79, "foo", FunctionName, i, tree);
+            assert_rename_target!(81, 83, "foo", ModuleName, i, tree);
+            assert_rename_target!(85, 87, "foo", TypeName, i, tree);
+            assert_rename_target!(99, 101, "foo", FunctionName, i, tree);
+            assert_rename_target!(103, 103, "A", Variable, i, tree);
+            assert_rename_target!(113, 113, "B", Variable, i, tree);
+            assert_rename_target!(117, 117, "A", Variable, i, tree);
+            assert_rename_target!(128, 129, "io", ModuleName, i, tree);
+            assert_rename_target!(131, 136, "format", FunctionName, i, tree);
+            assert_rename_target!(149, 149, "B", Variable, i, tree);
+
+            assert_eq!(None, tree.find_rename_target(offset(i)));
         }
         Ok(())
     }
