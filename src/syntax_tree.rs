@@ -342,7 +342,7 @@ impl FindRenameTarget for efmt::items::expressions::FullExpr {
 impl FindRenameTarget for efmt::items::expressions::BaseExpr {
     fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
         match self {
-            Self::List(_) => todo!(),
+            Self::List(x) => x.find_rename_target_if_contains(position),
             Self::Tuple(_) => todo!(),
             Self::Map(_) => todo!(),
             Self::RecordConstructOrIndex(_) => todo!(),
@@ -355,6 +355,13 @@ impl FindRenameTarget for efmt::items::expressions::BaseExpr {
             Self::MapUpdate(_) => todo!(),
             Self::RecordAccessOrUpdate(_) => todo!(),
         }
+    }
+}
+
+impl FindRenameTarget for efmt::items::expressions::ListExpr {
+    fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
+        self.children()
+            .find_map(|x| x.find_rename_target_if_contains(position))
     }
 }
 
@@ -566,6 +573,12 @@ foo(A) ->
                     assert_eq!(target.name, "format");
                     assert_eq!(target.kind, RenamableItemKind::FunctionName);
                     assert_eq!(target.position.offset(), offset(131).offset());
+                }
+                149 => {
+                    let target = tree.find_rename_target(offset(i)).or_fail()?;
+                    assert_eq!(target.name, "B");
+                    assert_eq!(target.kind, RenamableItemKind::Variable);
+                    assert_eq!(target.position.offset(), offset(i).offset());
                 }
                 _ => {
                     assert_eq!(None, tree.find_rename_target(offset(i)));
