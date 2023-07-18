@@ -343,7 +343,7 @@ impl FindRenameTarget for efmt::items::expressions::BaseExpr {
     fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
         match self {
             Self::List(x) => x.find_rename_target_if_contains(position),
-            Self::Tuple(_) => todo!(),
+            Self::Tuple(x) => x.find_rename_target_if_contains(position),
             Self::Map(_) => todo!(),
             Self::RecordConstructOrIndex(_) => todo!(),
             Self::Bitstring(_) => todo!(),
@@ -355,6 +355,13 @@ impl FindRenameTarget for efmt::items::expressions::BaseExpr {
             Self::MapUpdate(_) => todo!(),
             Self::RecordAccessOrUpdate(_) => todo!(),
         }
+    }
+}
+
+impl FindRenameTarget for efmt::items::expressions::TupleExpr {
+    fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
+        self.children()
+            .find_map(|x| x.find_rename_target_if_contains(position))
     }
 }
 
@@ -479,6 +486,7 @@ mod tests {
 foo(A) ->
     B = A + 2,
     io:format("B=~p~n", [B]),
+    {atom1, atom2, Record#record_name.field_name},
     ok.
 "#;
         let tree = SyntaxTree::parse(text.to_owned()).or_fail()?;
