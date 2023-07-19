@@ -344,7 +344,7 @@ impl FindTarget for efmt::items::expressions::BaseExpr {
         match self {
             Self::List(x) => x.find_target_if_contains(position),
             Self::Tuple(x) => x.find_target_if_contains(position),
-            Self::Map(_) => todo!(),
+            Self::Map(x) => x.find_target_if_contains(position),
             Self::RecordConstructOrIndex(x) => x.find_target_if_contains(position),
             Self::Bitstring(_) => todo!(),
             Self::Function(_) => todo!(),
@@ -355,6 +355,13 @@ impl FindTarget for efmt::items::expressions::BaseExpr {
             Self::MapUpdate(_) => todo!(),
             Self::RecordAccessOrUpdate(x) => x.find_target_if_contains(position),
         }
+    }
+}
+
+impl FindTarget for efmt::items::expressions::MapExpr {
+    fn find_target(&self, position: Position) -> Option<RenameTarget> {
+        self.children()
+            .find_map(|x| x.find_target_if_contains(position))
     }
 }
 
@@ -570,6 +577,7 @@ foo(A) ->
             assert_rename_target!(192, 201, "field_name", RecordFieldName, i, tree);
             assert_rename_target!(210, 212, "rec", RecordName, i, tree);
             assert_rename_target!(214, 216, "aaa", RecordFieldName, i, tree);
+            assert_rename_target!(235, 237, "ccc", RecordFieldName, i, tree);
 
             assert_eq!(None, tree.find_target(offset(i)));
         }
