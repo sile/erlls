@@ -353,8 +353,33 @@ impl FindRenameTarget for efmt::items::expressions::BaseExpr {
             Self::Literal(x) => x.find_rename_target_if_contains(position),
             Self::Block(_) => todo!(),
             Self::MapUpdate(_) => todo!(),
-            Self::RecordAccessOrUpdate(_) => todo!(),
+            Self::RecordAccessOrUpdate(x) => x.find_rename_target_if_contains(position),
         }
+    }
+}
+
+impl FindRenameTarget for efmt::items::expressions::RecordAccessOrUpdateExpr {
+    fn find_rename_target(&self, position: Position) -> Option<RenameTarget> {
+        if self.record_name().contains(position) {
+            let target = RenameTarget {
+                name: self.record_name().value().to_owned(),
+                kind: RenamableItemKind::RecordName,
+                position: self.record_name().start_position(),
+            };
+            return Some(target);
+        }
+        for field_name in self.field_names() {
+            if field_name.contains(position) {
+                let target = RenameTarget {
+                    name: field_name.value().to_owned(),
+                    kind: RenamableItemKind::RecordFieldName,
+                    position: field_name.start_position(),
+                };
+                return Some(target);
+            }
+        }
+        self.children()
+            .find_map(|x| x.find_rename_target_if_contains(position))
     }
 }
 
@@ -511,6 +536,9 @@ foo(A) ->
             assert_rename_target!(128, 129, "io", ModuleName, i, tree);
             assert_rename_target!(131, 136, "format", FunctionName, i, tree);
             assert_rename_target!(149, 149, "B", Variable, i, tree);
+            assert_rename_target!(173, 178, "Record", Variable, i, tree);
+            assert_rename_target!(180, 190, "record_name", RecordName, i, tree);
+            assert_rename_target!(192, 201, "field_name", RecordFieldName, i, tree);
 
             assert_eq!(None, tree.find_rename_target(offset(i)));
         }
