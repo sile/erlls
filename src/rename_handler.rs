@@ -29,7 +29,7 @@ impl RenameHandler {
         let new_name = params.new_name;
         let tree = SyntaxTree::parse(document.text.to_string()).or_fail()?;
         let efmt_position = document.text.to_efmt_position(position);
-        let Some(target) = tree.find_rename_target(efmt_position)  else {
+        let Some(target) = tree.find_target(efmt_position)  else {
             return Err(ResponseError::request_failed().message("No rename target found"));
         };
         todo!()
