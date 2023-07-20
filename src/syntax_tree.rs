@@ -352,9 +352,16 @@ impl FindTarget for efmt::items::expressions::BaseExpr {
             Self::Parenthesized(x) => x.find_target_if_contains(position),
             Self::Literal(x) => x.find_target_if_contains(position),
             Self::Block(_) => todo!(),
-            Self::MapUpdate(_) => todo!(),
+            Self::MapUpdate(x) => x.find_target_if_contains(position),
             Self::RecordAccessOrUpdate(x) => x.find_target_if_contains(position),
         }
+    }
+}
+
+impl FindTarget for efmt::items::expressions::MapUpdateExpr {
+    fn find_target(&self, position: Position) -> Option<Target> {
+        self.children()
+            .find_map(|child| child.find_target_if_contains(position))
     }
 }
 
@@ -581,6 +588,7 @@ foo(A) ->
     io:format("B=~p~n", [B]),
     {atom1, atom2, Record#record_name.field_name},
     #rec{aaa = (#{bbb => 1}), ccc = fun (A) -> -A end},
+    M#{a => 1, b => <<1:4, C/binary>>},
     ok.
 "#;
         let tree = SyntaxTree::parse(text.to_owned()).or_fail()?;
@@ -613,6 +621,7 @@ foo(A) ->
             assert_rename_target!(235, 237, "ccc", RecordFieldName, i, tree);
             assert_rename_target!(246, 246, "A", Variable, i, tree);
             assert_rename_target!(253, 253, "A", Variable, i, tree);
+            assert_rename_target!(265, 265, "M", Variable, i, tree);
 
             assert_eq!(None, tree.find_target(offset(i)));
         }
