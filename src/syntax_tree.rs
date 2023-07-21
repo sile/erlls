@@ -351,7 +351,7 @@ impl FindTarget for efmt::items::expressions::BaseExpr {
             Self::UnaryOpCall(x) => x.find_target_if_contains(position),
             Self::Parenthesized(x) => x.find_target_if_contains(position),
             Self::Literal(x) => x.find_target_if_contains(position),
-            Self::Block(_) => todo!(),
+            Self::Block(x) => x.find_target_if_contains(position),
             Self::MapUpdate(x) => x.find_target_if_contains(position),
             Self::RecordAccessOrUpdate(x) => x.find_target_if_contains(position),
         }
@@ -370,6 +370,13 @@ impl<A: FindTarget, B: FindTarget> FindTarget for efmt::items::Either<A, B> {
 impl<'a, A: FindTarget> FindTarget for &'a A {
     fn find_target(&self, position: Position) -> Option<Target> {
         (*self).find_target(position)
+    }
+}
+
+impl FindTarget for efmt::items::expressions::BlockExpr {
+    fn find_target(&self, position: Position) -> Option<Target> {
+        self.children()
+            .find_map(|child| child.find_target_if_contains(position))
     }
 }
 
@@ -611,6 +618,9 @@ foo(A) ->
     {atom1, atom2, Record#record_name.field_name},
     #rec{aaa = (#{bbb => 1}), ccc = fun (A) -> -A end},
     M#{a => 1, b => <<1:4, C/binary>>},
+    case 1 + 2 of
+        XXX -> baz(XXX)
+    end,
     ok.
 "#;
         let tree = SyntaxTree::parse(text.to_owned()).or_fail()?;
@@ -645,6 +655,9 @@ foo(A) ->
             assert_rename_target!(253, 253, "A", Variable, i, tree);
             assert_rename_target!(265, 265, "M", Variable, i, tree);
             assert_rename_target!(288, 288, "C", Variable, i, tree);
+            assert_rename_target!(327, 329, "XXX", Variable, i, tree);
+            assert_rename_target!(334, 336, "baz", FunctionName, i, tree);
+            assert_rename_target!(338, 340, "XXX", Variable, i, tree);
 
             assert_eq!(None, tree.find_target(offset(i)));
         }
