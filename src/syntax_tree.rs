@@ -57,10 +57,46 @@ impl FindTarget for efmt::items::forms::Form {
             Self::FunSpec(x) => x.find_target_if_contains(position),
             Self::FunDecl(x) => x.find_target_if_contains(position),
             Self::Define(_) => todo!(),
-            Self::RecordDecl(_) => todo!(),
+            Self::RecordDecl(x) => x.find_target_if_contains(position),
             Self::Export(x) => x.find_target_if_contains(position),
             Self::Include(_) | Self::Attr(_) => None,
         }
+    }
+}
+
+impl FindTarget for efmt::items::forms::RecordDecl {
+    fn find_target(&self, position: Position) -> Option<Target> {
+        if self.record_name().contains(position) {
+            let target = Target {
+                name: self.record_name().value().to_owned(),
+                kind: RenamableItemKind::RecordName,
+                position: self.record_name().start_position(),
+            };
+            return Some(target);
+        }
+        for field in self.fields() {
+            if field.field_name().contains(position) {
+                let target = Target {
+                    name: field.field_name().value().to_owned(),
+                    kind: RenamableItemKind::RecordFieldName,
+                    position: field.field_name().start_position(),
+                };
+                return Some(target);
+            }
+            if let Some(target) = field
+                .default_value()
+                .and_then(|x| x.find_target_if_contains(position))
+            {
+                return Some(target);
+            }
+            if let Some(target) = field
+                .field_type()
+                .and_then(|x| x.find_target_if_contains(position))
+            {
+                return Some(target);
+            }
+        }
+        None
     }
 }
 
@@ -689,6 +725,10 @@ bar(C) ->
             assert_rename_target!(338, 340, "XXX", Variable, i, tree);
             assert_rename_target!(370, 372, "foo", FunctionName, i, tree);
             assert_rename_target!(393, 395, "foo", TypeName, i, tree);
+            assert_rename_target!(411, 413, "rec", RecordName, i, tree);
+            assert_rename_target!(418, 420, "aaa", RecordFieldName, i, tree);
+            assert_rename_target!(424, 426, "bbb", FunctionName, i, tree);
+            assert_rename_target!(433, 435, "foo", TypeName, i, tree);
 
             assert_eq!(None, tree.find_target(offset(i)));
         }
