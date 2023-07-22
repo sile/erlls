@@ -1,4 +1,4 @@
-use efmt::{parse::TokenStream, span::Position, span::Span};
+use efmt::{items::Macro, parse::TokenStream, span::Position, span::Span};
 use erl_tokenize::Tokenizer;
 use orfail::OrFail;
 
@@ -17,9 +17,45 @@ impl SyntaxTree {
         Ok(Self { ts, module })
     }
 
-    pub fn find_target(&self, position: Position) -> Option<Target> {
-        // TODO: find macro call
-        self.module.find_target(position)
+    pub fn find_target(&mut self, position: Position) -> Option<Target> {
+        let mut candidate = None;
+        for macro_call in self.ts.macros().values() {
+            if macro_call.contains(position) {
+                candidate = Some(macro_call.clone());
+                break;
+            }
+            if position < macro_call.start_position() {
+                break;
+            }
+        }
+        if let Some(macro_call) = candidate {
+            self.find_target_macro_call(position, macro_call)
+        } else {
+            self.module.find_target(position)
+        }
+    }
+
+    fn find_target_macro_call(&mut self, position: Position, macro_call: Macro) -> Option<Target> {
+        if !macro_call.contains(position) {
+            return None;
+        }
+        if macro_call.macro_name().contains(position) {
+            let target = Target {
+                name: macro_call.macro_name().value().to_owned(),
+                kind: RenamableItemKind::MacroName,
+                position: macro_call.macro_name().start_position(),
+            };
+            return Some(target);
+        }
+        if let Some(target) = macro_call
+            .args()
+            .find(|x| x.contains(position))
+            .and_then(|x| x.parse_expr(&mut self.ts))
+            .and_then(|x| x.find_target_if_contains(position))
+        {
+            return Some(target);
+        }
+        None
     }
 }
 
@@ -56,11 +92,25 @@ impl FindTarget for efmt::items::forms::Form {
             Self::TypeDecl(x) => x.find_target_if_contains(position),
             Self::FunSpec(x) => x.find_target_if_contains(position),
             Self::FunDecl(x) => x.find_target_if_contains(position),
-            Self::Define(_) => todo!(),
+            Self::Define(x) => x.find_target_if_contains(position),
             Self::RecordDecl(x) => x.find_target_if_contains(position),
             Self::Export(x) => x.find_target_if_contains(position),
             Self::Include(_) | Self::Attr(_) => None,
         }
+    }
+}
+
+impl FindTarget for efmt::items::forms::DefineDirective {
+    fn find_target(&self, position: Position) -> Option<Target> {
+        if self.macro_name_token().contains(position) {
+            let target = Target {
+                name: self.macro_name_token().value().to_owned(),
+                kind: RenamableItemKind::MacroName,
+                position: self.macro_name_token().start_position(),
+            };
+            return Some(target);
+        }
+        None
     }
 }
 
@@ -685,10 +735,10 @@ foo(A) ->
 -define(FOO, foo(B)).
 -define(BAR(A), [A]).
 
-bar(C) ->
-    ?FOO + ?BAR(aaa:bbb(C)).
+bar() ->
+    ?FOO + ?BAR(bbb()).
 "#;
-        let tree = SyntaxTree::parse(text.to_owned()).or_fail()?;
+        let mut tree = SyntaxTree::parse(text.to_owned()).or_fail()?;
         for i in 0..text.len() {
             use RenamableItemKind::*;
 
@@ -729,6 +779,12 @@ bar(C) ->
             assert_rename_target!(418, 420, "aaa", RecordFieldName, i, tree);
             assert_rename_target!(424, 426, "bbb", FunctionName, i, tree);
             assert_rename_target!(433, 435, "foo", TypeName, i, tree);
+            assert_rename_target!(452, 454, "FOO", MacroName, i, tree);
+            assert_rename_target!(474, 476, "BAR", MacroName, i, tree);
+            assert_rename_target!(489, 491, "bar", FunctionName, i, tree);
+            assert_rename_target!(503, 505, "FOO", MacroName, i, tree);
+            assert_rename_target!(510, 512, "BAR", MacroName, i, tree);
+            assert_rename_target!(514, 516, "bbb", FunctionName, i, tree);
 
             assert_eq!(None, tree.find_target(offset(i)));
         }

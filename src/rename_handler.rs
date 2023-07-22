@@ -27,7 +27,7 @@ impl RenameHandler {
             .or_fail()?;
         let position = params.text_document_position.position;
         let new_name = params.new_name;
-        let tree = SyntaxTree::parse(document.text.to_string()).or_fail()?;
+        let mut tree = SyntaxTree::parse(document.text.to_string()).or_fail()?;
         let efmt_position = document.text.to_efmt_position(position);
         let Some(target) = tree.find_target(efmt_position)  else {
             return Err(ResponseError::request_failed().message("No rename target found"));
