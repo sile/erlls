@@ -56,13 +56,31 @@ impl FindTarget for efmt::items::forms::Form {
             Self::TypeDecl(x) => x.find_target_if_contains(position),
             Self::FunSpec(x) => x.find_target_if_contains(position),
             Self::FunDecl(x) => x.find_target_if_contains(position),
+            Self::Define(_) => todo!(),
+            Self::RecordDecl(_) => todo!(),
+            Self::Export(x) => x.find_target_if_contains(position),
             Self::Include(_) | Self::Attr(_) => None,
-            _ => todo!(),
         }
+    }
+}
 
-        // Define(DefineDirective),
-        // RecordDecl(RecordDecl),
-        // Export(ExportAttr),
+impl FindTarget for efmt::items::forms::ExportAttr {
+    fn find_target(&self, position: Position) -> Option<Target> {
+        for e in self.exports() {
+            if e.name().contains(position) {
+                let target = Target {
+                    name: e.name().value().to_owned(),
+                    kind: if self.is_function() {
+                        RenamableItemKind::FunctionName
+                    } else {
+                        RenamableItemKind::TypeName
+                    },
+                    position: e.name().start_position(),
+                };
+                return Some(target);
+            }
+        }
+        None
     }
 }
 
@@ -622,6 +640,17 @@ foo(A) ->
         XXX -> baz(XXX)
     end,
     ok.
+
+-export([foo/1]).
+-export_type([foo/0]).
+
+-record(rec, { aaa = bbb() :: foo() }).
+
+-define(FOO, foo(B)).
+-define(BAR(A), [A]).
+
+bar(C) ->
+    ?FOO + ?BAR(aaa:bbb(C)).
 "#;
         let tree = SyntaxTree::parse(text.to_owned()).or_fail()?;
         for i in 0..text.len() {
@@ -658,6 +687,8 @@ foo(A) ->
             assert_rename_target!(327, 329, "XXX", Variable, i, tree);
             assert_rename_target!(334, 336, "baz", FunctionName, i, tree);
             assert_rename_target!(338, 340, "XXX", Variable, i, tree);
+            assert_rename_target!(370, 372, "foo", FunctionName, i, tree);
+            assert_rename_target!(393, 395, "foo", TypeName, i, tree);
 
             assert_eq!(None, tree.find_target(offset(i)));
         }
