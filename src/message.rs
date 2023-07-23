@@ -356,6 +356,18 @@ impl Range {
     pub fn new(start: Position, end: Position) -> Self {
         Self { start, end }
     }
+
+    pub fn from_efmt_range(range: std::ops::Range<efmt::span::Position>) -> Self {
+        let start = Position::new(
+            range.start.line() as usize - 1,
+            range.start.column() as usize - 1,
+        );
+        let end = Position::new(
+            range.end.line() as usize - 1,
+            range.end.column() as usize - 1,
+        );
+        Self { start, end }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -404,4 +416,10 @@ pub enum PositionEncodingKind {
 pub struct Location {
     pub uri: DocumentUri,
     pub range: Range,
+}
+
+impl Location {
+    pub fn new(uri: DocumentUri, range: Range) -> Self {
+        Self { uri, range }
+    }
 }

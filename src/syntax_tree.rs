@@ -2,6 +2,8 @@ use efmt::{items::Macro, parse::TokenStream, span::Position, span::Span};
 use erl_tokenize::Tokenizer;
 use orfail::OrFail;
 
+pub type ItemRange = std::ops::Range<Position>;
+
 #[derive(Debug)]
 pub struct SyntaxTree {
     ts: TokenStream,
@@ -15,6 +17,10 @@ impl SyntaxTree {
         let mut ts = TokenStream::new(tokenizer);
         let module: efmt::items::Module = ts.parse().or_fail()?;
         Ok(Self { ts, module })
+    }
+
+    pub fn find_definition(&self, item: &ItemKind) -> Option<ItemRange> {
+        todo!()
     }
 
     pub fn find_target(&mut self, position: Position) -> Option<Target> {

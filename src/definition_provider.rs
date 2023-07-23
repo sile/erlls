@@ -1,7 +1,7 @@
 use crate::{
     document::EditingDocuments,
     error::ResponseError,
-    message::{DefinitionParams, DocumentUri, ResponseMessage},
+    message::{DefinitionParams, DocumentUri, Location, Range, ResponseMessage},
     syntax_tree::{ItemKind, Mfa, SyntaxTree},
 };
 use orfail::OrFail;
@@ -32,20 +32,16 @@ impl DefinitionProvider {
             return Err(ResponseError::request_failed().message("No definitions found"));
         };
 
-        match &target.kind {
-            ItemKind::TypeName(mfa) => {
-                self.find_type_definition(
-                    mfa,
-                    params.text_document().uri.clone(),
-                    editing_documents,
-                )
-                .or_fail()?;
-                todo!()
-            }
+        let location = match &target.kind {
+            ItemKind::TypeName(mfa) => self
+                .find_type_definition(mfa, params.text_document().uri.clone(), editing_documents)
+                .or_fail(),
             _ => {
                 todo!("{target:?}")
             }
-        }
+        };
+        let response = ResponseMessage::result(location).or_fail()?;
+        Ok(response)
     }
 
     fn find_type_definition(
@@ -53,11 +49,19 @@ impl DefinitionProvider {
         mfa: &Mfa,
         mut target_uri: DocumentUri,
         editing_documents: &EditingDocuments,
-    ) -> orfail::Result<()> {
+    ) -> orfail::Result<Location> {
         if let Some(module) = &mfa.module {
             target_uri = self.resolve_module_uri(module).or_fail()?;
         }
-        todo!()
+
+        let document = editing_documents.get(&target_uri).or_fail()?;
+        let tree = SyntaxTree::parse(document.text.to_string()).or_fail()?;
+        if let Some(range) = tree.find_definition(&ItemKind::TypeName(mfa.clone())) {
+            Ok(Location::new(target_uri, Range::from_efmt_range(range)))
+        } else {
+            // TODO: handle include
+            todo!()
+        }
     }
 
     fn resolve_module_uri(&self, module: &str) -> orfail::Result<DocumentUri> {
