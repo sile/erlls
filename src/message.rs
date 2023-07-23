@@ -1,7 +1,7 @@
 use crate::error::{ErrorCode, ResponseError};
-use orfail::OrFail;
+use orfail::{Failure, OrFail};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -111,6 +111,13 @@ impl DocumentUri {
         &self.0
     }
 
+    pub fn from_path<P: AsRef<Path>>(path: P) -> orfail::Result<Self> {
+        let url = url::Url::from_file_path(path)
+            .map_err(|()| Failure::new().message("DocumentUri::from_path() failed"))
+            .or_fail()?;
+        Ok(Self(url))
+    }
+
     pub fn to_existing_path_buf(&self) -> orfail::Result<PathBuf> {
         (self.0.scheme() == "file")
             .or_fail()
@@ -205,6 +212,7 @@ impl Default for ServerInfo {
 pub struct ServerCapabilities {
     pub rename_provider: bool,
     pub document_formatting_provider: bool,
+    pub definition_provider: bool,
     pub text_document_sync: TextDocumentSyncKind,
     pub position_encoding: PositionEncodingKind,
 }
@@ -214,6 +222,7 @@ impl Default for ServerCapabilities {
         Self {
             rename_provider: true,
             document_formatting_provider: true,
+            definition_provider: true,
             text_document_sync: TextDocumentSyncKind::INCREMENTAL,
             position_encoding: PositionEncodingKind::Utf32,
         }
@@ -264,6 +273,23 @@ pub struct RenameParams {
 pub struct TextDocumentPositionParams {
     pub text_document: TextDocumentIdentifier,
     pub position: Position,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DefinitionParams {
+    #[serde(flatten)]
+    text_document_position: TextDocumentPositionParams,
+}
+
+impl DefinitionParams {
+    pub fn text_document(&self) -> &TextDocumentIdentifier {
+        &self.text_document_position.text_document
+    }
+
+    pub fn position(&self) -> Position {
+        self.text_document_position.position
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -372,4 +398,10 @@ pub enum PositionEncodingKind {
     Utf16,
     #[serde(rename = "utf-32")]
     Utf32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Location {
+    pub uri: DocumentUri,
+    pub range: Range,
 }

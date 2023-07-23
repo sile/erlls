@@ -9,6 +9,7 @@ use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct RenameHandler {
+    #[allow(dead_code)]
     root_dir: PathBuf,
 }
 
@@ -26,10 +27,10 @@ impl RenameHandler {
             .get(&params.text_document_position.text_document.uri)
             .or_fail()?;
         let position = params.text_document_position.position;
-        let new_name = params.new_name;
+        let _new_name = params.new_name;
         let mut tree = SyntaxTree::parse(document.text.to_string()).or_fail()?;
         let efmt_position = document.text.to_efmt_position(position);
-        let Some(target) = tree.find_target(efmt_position)  else {
+        let Some(_target) = tree.find_target(efmt_position)  else {
             return Err(ResponseError::request_failed().message("No rename target found"));
         };
         todo!()

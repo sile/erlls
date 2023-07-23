@@ -1,11 +1,12 @@
 use crate::{
+    definition_provider::DefinitionProvider,
     document::{Document, EditingDocuments, Text},
     error::ResponseError,
     message::{
-        DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-        DocumentFormattingParams, InitializeParams, InitializeResult, InitializedParams, Message,
-        NotificationMessage, PositionEncodingKind, RenameParams, RequestMessage, ResponseMessage,
-        TextEdit,
+        DefinitionParams, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
+        DidOpenTextDocumentParams, DocumentFormattingParams, InitializeParams, InitializeResult,
+        InitializedParams, Message, NotificationMessage, PositionEncodingKind, RenameParams,
+        RequestMessage, ResponseMessage, TextEdit,
     },
     rename_handler::RenameHandler,
 };
@@ -56,6 +57,8 @@ impl LanguageServer {
                     .and_then(|params| state.handle_rename_request(params)),
                 "textDocument/formatting" => deserialize_params(msg.params)
                     .and_then(|params| state.handle_formatting_request(params)),
+                "textDocument/definition" => deserialize_params(msg.params)
+                    .and_then(|params| state.handle_definition_request(params)),
                 "shutdown" => state.handle_shutdown_request(),
                 _ => {
                     todo!("handle_request: method={}", msg.method)
@@ -110,7 +113,8 @@ impl LanguageServer {
         let state = LanguageServerState {
             root_dir: root_dir.clone(),
             documents: EditingDocuments::default(),
-            rename_handler: RenameHandler::new(root_dir),
+            rename_handler: RenameHandler::new(root_dir.clone()),
+            definition_provider: DefinitionProvider::new(root_dir),
         };
 
         log::info!("Client: {:?}", params.client_info);
@@ -142,6 +146,7 @@ struct LanguageServerState {
     root_dir: PathBuf,
     documents: EditingDocuments,
     rename_handler: RenameHandler,
+    definition_provider: DefinitionProvider,
 }
 
 impl LanguageServerState {
@@ -154,6 +159,14 @@ impl LanguageServerState {
 
     fn handle_shutdown_request(&mut self) -> Result<ResponseMessage, ResponseError> {
         Ok(ResponseMessage::default())
+    }
+
+    fn handle_definition_request(
+        &mut self,
+        params: DefinitionParams,
+    ) -> Result<ResponseMessage, ResponseError> {
+        self.definition_provider
+            .handle_request(params, &self.documents)
     }
 
     fn handle_formatting_request(
