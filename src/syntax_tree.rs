@@ -4,6 +4,10 @@ use orfail::OrFail;
 
 pub type ItemRange = std::ops::Range<Position>;
 
+fn item_range<T: Span>(item: &T) -> ItemRange {
+    item.start_position()..item.end_position()
+}
+
 #[derive(Debug)]
 pub struct SyntaxTree {
     ts: TokenStream,
@@ -121,13 +125,13 @@ impl FindDefinition for efmt_core::items::forms::Form {
     fn find_definition(&self, text: &str, item: &ItemKind) -> Option<ItemRange> {
         match self {
             Self::TypeDecl(x) => x.find_definition(text, item),
-            _ => None
+            Self::Module(x) => x.find_definition(text, item),
+             _ => None
             // Self::Define(_) => todo!(),
             // Self::FunSpec(_) => todo!(),
             // Self::FunDecl(_) => todo!(),
             // Self::RecordDecl(_) => todo!(),
             // Self::Export(_) => todo!(),
-            // Self::Module(_) => todo!(),
             // Self::Include(_) | Self::Attr(_) => None,
         }
     }
@@ -227,11 +231,7 @@ impl FindTarget for efmt_core::items::forms::FunSpec {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if let Some(name) = self.module_name() {
             if name.contains(position) {
-                let target = Target {
-                    name: name.value().to_owned(),
-                    kind: ItemKind::ModuleName,
-                    position: name.start_position(),
-                };
+                let target = Target::module_name(name.start_position(), name.value().to_owned());
                 return Some(target);
             }
         }
@@ -292,25 +292,33 @@ impl FindDefinition for efmt_core::items::forms::TypeDecl {
         if self.params().len() != mfa.arity {
             return None;
         }
-        Some(ItemRange {
-            start: self.type_name().start_position(),
-            end: self.type_name().end_position(),
-        })
+        Some(item_range(self.type_name()))
     }
 }
 
 impl FindTarget for efmt_core::items::forms::ModuleAttr {
     fn find_target(&self, _text: &str, position: Position) -> Option<Target> {
         if self.module_name().contains(position) {
-            let target = Target {
-                name: self.module_name().value().to_owned(),
-                kind: ItemKind::ModuleName,
-                position: self.module_name().start_position(),
-            };
+            let target = Target::module_name(
+                self.module_name().start_position(),
+                self.module_name().value().to_owned(),
+            );
             Some(target)
         } else {
             None
         }
+    }
+}
+
+impl FindDefinition for efmt_core::items::forms::ModuleAttr {
+    fn find_definition(&self, _text: &str, item: &ItemKind) -> Option<ItemRange> {
+        let ItemKind::ModuleName{ module } = item else {
+            return None;
+        };
+        if self.module_name().value() != module {
+            return None;
+        }
+        Some(item_range(self.module_name()))
     }
 }
 
@@ -437,11 +445,10 @@ impl FindTarget for efmt_core::items::types::MfargsType {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if let Some(module_name) = self.module_name() {
             if module_name.contains(position) {
-                let target = Target {
-                    name: module_name.value().to_owned(),
-                    kind: ItemKind::ModuleName,
-                    position: module_name.start_position(),
-                };
+                let target = Target::module_name(
+                    module_name.start_position(),
+                    module_name.value().to_owned(),
+                );
                 return Some(target);
             }
         }
@@ -558,11 +565,7 @@ impl FindTarget for efmt_core::items::expressions::FunctionExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if let Some(x) = self.module_name() {
             if x.contains(position) {
-                let target = Target {
-                    name: x.value().to_owned(),
-                    kind: ItemKind::ModuleName,
-                    position: x.start_position(),
-                };
+                let target = Target::module_name(x.start_position(), x.value().to_owned());
                 return Some(target);
             }
         }
@@ -663,11 +666,7 @@ impl FindTarget for efmt_core::items::expressions::FunctionCallExpr {
         if let Some(x) = self.module_expr() {
             if let Some(x) = x.as_atom_token() {
                 if x.contains(position) {
-                    let target = Target {
-                        name: x.value().to_owned(),
-                        kind: ItemKind::ModuleName,
-                        position: x.start_position(),
-                    };
+                    let target = Target::module_name(x.start_position(), x.value().to_owned());
                     return Some(target);
                 }
             }
@@ -732,6 +731,14 @@ pub struct Target {
 }
 
 impl Target {
+    pub fn module_name(position: Position, module: String) -> Self {
+        Self {
+            name: module.clone(),
+            kind: ItemKind::ModuleName { module },
+            position,
+        }
+    }
+
     pub fn type_name(
         position: Position,
         module: Option<String>,
@@ -772,13 +779,23 @@ pub struct Mfa {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ItemKind {
-    ModuleName, // TODO: name
+    ModuleName { module: String },
     TypeName(Mfa),
     FunctionName, // TODO: module, name, arity
     MacroName,    // TODO: option<arity>
     RecordName,
     RecordFieldName, // TODO: record_namee, field_name
     Variable,
+}
+
+impl ItemKind {
+    pub fn module(&self) -> Option<&str> {
+        match self {
+            Self::ModuleName { module } => Some(module),
+            Self::TypeName(mfa) => mfa.module.as_ref().map(|x| x.as_str()),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -831,22 +848,22 @@ bar() ->
         for i in 0..text.len() {
             use ItemKind::*;
 
-            assert_rename_target!(8, 10, "foo", ModuleName, i, tree);
+            assert_rename_target!(8, 10, "foo", ModuleName { .. }, i, tree);
             assert_rename_target!(21, 23, "foo", TypeName { .. }, i, tree);
             assert_rename_target!(30, 32, "any", TypeName { .. }, i, tree);
             assert_rename_target!(43, 45, "bar", TypeName { .. }, i, tree);
             assert_rename_target!(47, 47, "A", Variable, i, tree);
             assert_rename_target!(54, 54, "A", Variable, i, tree);
-            assert_rename_target!(58, 58, "b", ModuleName, i, tree);
+            assert_rename_target!(58, 58, "b", ModuleName { .. }, i, tree);
             assert_rename_target!(60, 60, "b", TypeName { .. }, i, tree);
             assert_rename_target!(77, 79, "foo", FunctionName, i, tree);
-            assert_rename_target!(81, 83, "foo", ModuleName, i, tree);
+            assert_rename_target!(81, 83, "foo", ModuleName { .. }, i, tree);
             assert_rename_target!(85, 87, "foo", TypeName { .. }, i, tree);
             assert_rename_target!(99, 101, "foo", FunctionName, i, tree);
             assert_rename_target!(103, 103, "A", Variable, i, tree);
             assert_rename_target!(113, 113, "B", Variable, i, tree);
             assert_rename_target!(117, 117, "A", Variable, i, tree);
-            assert_rename_target!(128, 129, "io", ModuleName, i, tree);
+            assert_rename_target!(128, 129, "io", ModuleName { .. }, i, tree);
             assert_rename_target!(131, 136, "format", FunctionName, i, tree);
             assert_rename_target!(149, 149, "B", Variable, i, tree);
             assert_rename_target!(173, 178, "Record", Variable, i, tree);

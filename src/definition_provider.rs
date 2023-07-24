@@ -2,7 +2,7 @@ use crate::{
     document::EditingDocuments,
     error::ResponseError,
     message::{DefinitionParams, DocumentUri, Location, Range, ResponseMessage},
-    syntax_tree::{ItemKind, Mfa, SyntaxTree},
+    syntax_tree::{ItemKind, SyntaxTree},
 };
 use orfail::OrFail;
 use std::path::PathBuf;
@@ -33,27 +33,26 @@ impl DefinitionProvider {
         };
         log::debug!("target: {target:?}");
 
-        let location = match &target.kind {
-            ItemKind::TypeName(mfa) => self
-                .find_type_definition(mfa, params.text_document().uri.clone(), editing_documents)
-                .or_fail()?,
-            _ => {
-                todo!("{target:?}")
-            }
-        };
+        let location = self
+            .find_definition(
+                target.kind,
+                params.text_document().uri.clone(),
+                editing_documents,
+            )
+            .or_fail()?;
         log::debug!("location: {location:?}");
 
         let response = ResponseMessage::result(location).or_fail()?;
         Ok(response)
     }
 
-    fn find_type_definition(
+    fn find_definition(
         &self,
-        mfa: &Mfa,
+        item: ItemKind,
         mut target_uri: DocumentUri,
         editing_documents: &EditingDocuments,
     ) -> orfail::Result<Location> {
-        if let Some(module) = &mfa.module {
+        if let Some(module) = item.module() {
             target_uri = self.resolve_module_uri(module).or_fail()?;
         }
 
@@ -63,7 +62,7 @@ impl DefinitionProvider {
             target_uri.read().or_fail()?
         };
         let tree = SyntaxTree::parse(text).or_fail()?;
-        if let Some(range) = tree.find_definition(&ItemKind::TypeName(mfa.clone())) {
+        if let Some(range) = tree.find_definition(&item) {
             Ok(Location::new(target_uri, Range::from_efmt_range(range)))
         } else {
             // TODO: handle include
