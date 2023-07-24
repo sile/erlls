@@ -128,10 +128,9 @@ impl FindDefinition for efmt_core::items::forms::Form {
             Self::TypeDecl(x) => x.find_definition(text, item),
             Self::FunDecl(x) => x.find_definition(text, item),
             Self::Define(x) => x.find_definition(text, item),
+            Self::RecordDecl(x) => x.find_definition(text, item),
             Self::FunSpec(_) | Self::Export(_) | Self::Include(_) | Self::Attr(_) => None,
-            _ => None,
         }
-        // Self::RecordDecl(_) => todo!(),
     }
 }
 
@@ -169,20 +168,19 @@ impl FindDefinition for efmt_core::items::forms::DefineDirective {
 impl FindTarget for efmt_core::items::forms::RecordDecl {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if self.record_name().contains(position) {
-            let target = Target {
-                name: self.record_name().value().to_owned(),
-                kind: ItemKind::RecordName,
-                position: self.record_name().start_position(),
-            };
+            let target = Target::record_name(
+                self.record_name().start_position(),
+                self.record_name().value().to_owned(),
+            );
             return Some(target);
         }
         for field in self.fields() {
             if field.field_name().contains(position) {
-                let target = Target {
-                    name: field.field_name().value().to_owned(),
-                    kind: ItemKind::RecordFieldName,
-                    position: field.field_name().start_position(),
-                };
+                let target = Target::record_field_name(
+                    field.field_name().start_position(),
+                    self.record_name().value().to_owned(),
+                    field.field_name().value().to_owned(),
+                );
                 return Some(target);
             }
             if let Some(target) = field
@@ -199,6 +197,29 @@ impl FindTarget for efmt_core::items::forms::RecordDecl {
             }
         }
         None
+    }
+}
+
+impl FindDefinition for efmt_core::items::forms::RecordDecl {
+    fn find_definition(&self, _text: &str, item: &ItemKind) -> Option<ItemRange> {
+        let Some(record_name) = item.record_name() else {
+            return None;
+        };
+
+        if record_name != self.record_name().value() {
+            return None;
+        }
+
+        if let Some(field_name) = item.record_field_name() {
+            for field in self.fields() {
+                if field.field_name().value() == field_name {
+                    return Some(item_range(field.field_name()));
+                }
+            }
+            None
+        } else {
+            Some(item_range(self.record_name()))
+        }
     }
 }
 
@@ -425,20 +446,17 @@ impl FindTarget for efmt_core::items::types::FunctionType {
 impl FindTarget for efmt_core::items::types::RecordType {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if self.name().contains(position) {
-            let target = Target {
-                name: self.name().value().to_owned(),
-                kind: ItemKind::RecordName,
-                position: self.name().start_position(),
-            };
+            let target =
+                Target::record_name(self.name().start_position(), self.name().value().to_owned());
             return Some(target);
         }
         self.fields().find_map(|(name, field)| {
             if name.contains(position) {
-                let target = Target {
-                    name: name.value().to_owned(),
-                    kind: ItemKind::RecordFieldName,
-                    position: name.start_position(),
-                };
+                let target = Target::record_field_name(
+                    name.start_position(),
+                    self.name().value().to_owned(),
+                    name.value().to_owned(),
+                );
                 Some(target)
             } else {
                 field.find_target_if_contains(text, position)
@@ -642,20 +660,19 @@ impl FindTarget for efmt_core::items::expressions::ParenthesizedExpr {
 impl FindTarget for efmt_core::items::expressions::RecordConstructOrIndexExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if self.record_name().contains(position) {
-            let target = Target {
-                name: self.record_name().value().to_owned(),
-                kind: ItemKind::RecordName,
-                position: self.record_name().start_position(),
-            };
+            let target = Target::record_name(
+                self.record_name().start_position(),
+                self.record_name().value().to_owned(),
+            );
             return Some(target);
         }
         for field_name in self.field_names() {
             if field_name.contains(position) {
-                let target = Target {
-                    name: field_name.value().to_owned(),
-                    kind: ItemKind::RecordFieldName,
-                    position: field_name.start_position(),
-                };
+                let target = Target::record_field_name(
+                    field_name.start_position(),
+                    self.record_name().value().to_owned(),
+                    field_name.value().to_owned(),
+                );
                 return Some(target);
             }
         }
@@ -667,20 +684,19 @@ impl FindTarget for efmt_core::items::expressions::RecordConstructOrIndexExpr {
 impl FindTarget for efmt_core::items::expressions::RecordAccessOrUpdateExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if self.record_name().contains(position) {
-            let target = Target {
-                name: self.record_name().value().to_owned(),
-                kind: ItemKind::RecordName,
-                position: self.record_name().start_position(),
-            };
+            let target = Target::record_name(
+                self.record_name().start_position(),
+                self.record_name().value().to_owned(),
+            );
             return Some(target);
         }
         for field_name in self.field_names() {
             if field_name.contains(position) {
-                let target = Target {
-                    name: field_name.value().to_owned(),
-                    kind: ItemKind::RecordFieldName,
-                    position: field_name.start_position(),
-                };
+                let target = Target::record_field_name(
+                    field_name.start_position(),
+                    self.record_name().value().to_owned(),
+                    field_name.value().to_owned(),
+                );
                 return Some(target);
             }
         }
@@ -831,6 +847,25 @@ impl Target {
             position,
         }
     }
+
+    pub fn record_name(position: Position, name: String) -> Self {
+        Self {
+            name: name.clone(),
+            kind: ItemKind::RecordName { name },
+            position,
+        }
+    }
+
+    pub fn record_field_name(position: Position, record_name: String, field_name: String) -> Self {
+        Self {
+            name: field_name.clone(),
+            kind: ItemKind::RecordFieldName {
+                record_name,
+                field_name,
+            },
+            position,
+        }
+    }
 }
 
 // TODO: remove
@@ -841,14 +876,26 @@ pub struct Mfa {
     pub arity: usize,
 }
 
+// TODO: rename
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ItemKind {
-    ModuleName { module: String },
+    ModuleName {
+        module: String,
+    },
     TypeName(Mfa),
     FunctionName(Mfa),
-    MacroName { name: String, arity: Option<usize> },
-    RecordName,
-    RecordFieldName, // TODO: record_namee, field_name
+    MacroName {
+        name: String,
+        arity: Option<usize>,
+    },
+    RecordName {
+        name: String,
+    },
+    RecordFieldName {
+        record_name: String,
+        field_name: String,
+    },
+    // TODO
     Variable,
 }
 
@@ -858,6 +905,21 @@ impl ItemKind {
             Self::ModuleName { module } => Some(module),
             Self::TypeName(mfa) => mfa.module.as_ref().map(|x| x.as_str()),
             Self::FunctionName(mfa) => mfa.module.as_ref().map(|x| x.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn record_name(&self) -> Option<&str> {
+        match self {
+            Self::RecordName { name } => Some(name),
+            Self::RecordFieldName { record_name, .. } => Some(record_name),
+            _ => None,
+        }
+    }
+
+    pub fn record_field_name(&self) -> Option<&str> {
+        match self {
+            Self::RecordFieldName { field_name, .. } => Some(field_name),
             _ => None,
         }
     }
@@ -932,11 +994,11 @@ bar() ->
             assert_rename_target!(131, 136, "format", FunctionName { .. }, i, tree);
             assert_rename_target!(149, 149, "B", Variable, i, tree);
             assert_rename_target!(173, 178, "Record", Variable, i, tree);
-            assert_rename_target!(180, 190, "record_name", RecordName, i, tree);
-            assert_rename_target!(192, 201, "field_name", RecordFieldName, i, tree);
-            assert_rename_target!(210, 212, "rec", RecordName, i, tree);
-            assert_rename_target!(214, 216, "aaa", RecordFieldName, i, tree);
-            assert_rename_target!(235, 237, "ccc", RecordFieldName, i, tree);
+            assert_rename_target!(180, 190, "record_name", RecordName { .. }, i, tree);
+            assert_rename_target!(192, 201, "field_name", RecordFieldName { .. }, i, tree);
+            assert_rename_target!(210, 212, "rec", RecordName { .. }, i, tree);
+            assert_rename_target!(214, 216, "aaa", RecordFieldName { .. }, i, tree);
+            assert_rename_target!(235, 237, "ccc", RecordFieldName { .. }, i, tree);
             assert_rename_target!(246, 246, "A", Variable, i, tree);
             assert_rename_target!(253, 253, "A", Variable, i, tree);
             assert_rename_target!(265, 265, "M", Variable, i, tree);
@@ -946,8 +1008,8 @@ bar() ->
             assert_rename_target!(338, 340, "XXX", Variable, i, tree);
             assert_rename_target!(370, 372, "foo", FunctionName { .. }, i, tree);
             assert_rename_target!(393, 395, "foo", TypeName { .. }, i, tree);
-            assert_rename_target!(411, 413, "rec", RecordName, i, tree);
-            assert_rename_target!(418, 420, "aaa", RecordFieldName, i, tree);
+            assert_rename_target!(411, 413, "rec", RecordName { .. }, i, tree);
+            assert_rename_target!(418, 420, "aaa", RecordFieldName { .. }, i, tree);
             assert_rename_target!(424, 426, "bbb", FunctionName { .. }, i, tree);
             assert_rename_target!(433, 435, "foo", TypeName { .. }, i, tree);
             assert_rename_target!(452, 454, "FOO", MacroName { .. }, i, tree);
