@@ -175,13 +175,12 @@ impl LanguageServerState {
     ) -> Result<ResponseMessage, ResponseError> {
         let doc = self.documents.get(&params.text_document.uri).or_fail()?;
         let text = doc.text.to_string();
-        let new_text =
-            match efmt::Options::default().format_text::<efmt::items::ModuleOrConfig>(&text) {
-                Err(e) => {
-                    return Err(ResponseError::request_failed().message(&e.to_string()));
-                }
-                Ok(new_text) => new_text,
-            };
+        let new_text = match efmt_core::format_text::<efmt_core::items::ModuleOrConfig>(&text) {
+            Err(e) => {
+                return Err(ResponseError::request_failed().message(&e.to_string()));
+            }
+            Ok(new_text) => new_text,
+        };
 
         // TODO: optimzie
         let mut edits = Vec::new();

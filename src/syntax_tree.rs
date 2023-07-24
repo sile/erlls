@@ -1,4 +1,4 @@
-use efmt::{items::Macro, parse::TokenStream, span::Position, span::Span};
+use efmt_core::{items::Macro, parse::TokenStream, span::Position, span::Span};
 use erl_tokenize::Tokenizer;
 use orfail::OrFail;
 
@@ -7,7 +7,7 @@ pub type ItemRange = std::ops::Range<Position>;
 #[derive(Debug)]
 pub struct SyntaxTree {
     ts: TokenStream,
-    module: efmt::items::Module,
+    module: efmt_core::items::Module,
 }
 
 impl SyntaxTree {
@@ -15,7 +15,7 @@ impl SyntaxTree {
         let tokenizer = Tokenizer::new(text);
         // TODO: tokenizer.set_file(path);
         let mut ts = TokenStream::new(tokenizer);
-        let module: efmt::items::Module = ts.parse().or_fail()?;
+        let module: efmt_core::items::Module = ts.parse().or_fail()?;
         Ok(Self { ts, module })
     }
 
@@ -84,7 +84,7 @@ pub trait FindTarget {
     }
 }
 
-impl FindTarget for efmt::items::Module {
+impl FindTarget for efmt_core::items::Module {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         for form in self.children() {
             if let Some(target) = form.get().find_target_if_contains(text, position) {
@@ -95,14 +95,14 @@ impl FindTarget for efmt::items::Module {
     }
 }
 
-impl FindDefinition for efmt::items::Module {
+impl FindDefinition for efmt_core::items::Module {
     fn find_definition(&self, text: &str, item: &ItemKind) -> Option<ItemRange> {
         self.children()
             .find_map(|x| x.get().find_definition(text, item))
     }
 }
 
-impl FindTarget for efmt::items::forms::Form {
+impl FindTarget for efmt_core::items::forms::Form {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         match self {
             Self::Module(x) => x.find_target_if_contains(text, position),
@@ -117,7 +117,7 @@ impl FindTarget for efmt::items::forms::Form {
     }
 }
 
-impl FindDefinition for efmt::items::forms::Form {
+impl FindDefinition for efmt_core::items::forms::Form {
     fn find_definition(&self, text: &str, item: &ItemKind) -> Option<ItemRange> {
         match self {
             Self::TypeDecl(x) => x.find_definition(text, item),
@@ -133,7 +133,7 @@ impl FindDefinition for efmt::items::forms::Form {
     }
 }
 
-impl FindTarget for efmt::items::forms::DefineDirective {
+impl FindTarget for efmt_core::items::forms::DefineDirective {
     fn find_target(&self, _text: &str, position: Position) -> Option<Target> {
         if self.macro_name_token().contains(position) {
             let target = Target {
@@ -147,7 +147,7 @@ impl FindTarget for efmt::items::forms::DefineDirective {
     }
 }
 
-impl FindTarget for efmt::items::forms::RecordDecl {
+impl FindTarget for efmt_core::items::forms::RecordDecl {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if self.record_name().contains(position) {
             let target = Target {
@@ -183,7 +183,7 @@ impl FindTarget for efmt::items::forms::RecordDecl {
     }
 }
 
-impl FindTarget for efmt::items::forms::ExportAttr {
+impl FindTarget for efmt_core::items::forms::ExportAttr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         for e in self.exports() {
             if e.name().contains(position) {
@@ -202,7 +202,7 @@ impl FindTarget for efmt::items::forms::ExportAttr {
     }
 }
 
-impl FindTarget for efmt::items::forms::FunDecl {
+impl FindTarget for efmt_core::items::forms::FunDecl {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         for clause in self.clauses() {
             if clause.function_name().contains(position) {
@@ -223,7 +223,7 @@ impl FindTarget for efmt::items::forms::FunDecl {
     }
 }
 
-impl FindTarget for efmt::items::forms::FunSpec {
+impl FindTarget for efmt_core::items::forms::FunSpec {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if let Some(name) = self.module_name() {
             if name.contains(position) {
@@ -257,7 +257,7 @@ impl FindTarget for efmt::items::forms::FunSpec {
     }
 }
 
-impl FindTarget for efmt::items::forms::TypeDecl {
+impl FindTarget for efmt_core::items::forms::TypeDecl {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if self.type_name().contains(position) {
             return Some(Target::type_name(
@@ -281,7 +281,7 @@ impl FindTarget for efmt::items::forms::TypeDecl {
     }
 }
 
-impl FindDefinition for efmt::items::forms::TypeDecl {
+impl FindDefinition for efmt_core::items::forms::TypeDecl {
     fn find_definition(&self, _text: &str, item: &ItemKind) -> Option<ItemRange> {
         let ItemKind::TypeName(mfa) = item else {
             return None;
@@ -299,7 +299,7 @@ impl FindDefinition for efmt::items::forms::TypeDecl {
     }
 }
 
-impl FindTarget for efmt::items::forms::ModuleAttr {
+impl FindTarget for efmt_core::items::forms::ModuleAttr {
     fn find_target(&self, _text: &str, position: Position) -> Option<Target> {
         if self.module_name().contains(position) {
             let target = Target {
@@ -314,14 +314,14 @@ impl FindTarget for efmt::items::forms::ModuleAttr {
     }
 }
 
-impl FindTarget for efmt::items::Type {
+impl FindTarget for efmt_core::items::Type {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         self.children()
             .find_map(|child| child.find_target_if_contains(text, position))
     }
 }
 
-impl FindTarget for efmt::items::types::NonUnionType {
+impl FindTarget for efmt_core::items::types::NonUnionType {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         match self {
             Self::Base(x) => x.find_target_if_contains(text, position),
@@ -330,7 +330,7 @@ impl FindTarget for efmt::items::types::NonUnionType {
     }
 }
 
-impl FindTarget for efmt::items::types::BaseType {
+impl FindTarget for efmt_core::items::types::BaseType {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         match self {
             Self::Mfargs(x) => x.find_target_if_contains(text, position),
@@ -347,14 +347,14 @@ impl FindTarget for efmt::items::types::BaseType {
     }
 }
 
-impl FindTarget for efmt::items::types::BinaryOpType {
+impl FindTarget for efmt_core::items::types::BinaryOpType {
     fn find_target(&self, _text: &str, _position: Position) -> Option<Target> {
         // As binary op types are only applied to integer types, they are never renamed.
         None
     }
 }
 
-impl FindTarget for efmt::items::types::AnnotatedVariableType {
+impl FindTarget for efmt_core::items::types::AnnotatedVariableType {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if self.variable().contains(position) {
             let target = Target {
@@ -368,7 +368,7 @@ impl FindTarget for efmt::items::types::AnnotatedVariableType {
     }
 }
 
-impl FindTarget for efmt::items::types::FunctionType {
+impl FindTarget for efmt_core::items::types::FunctionType {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         for param in self.params() {
             if let Some(target) = param.find_target_if_contains(text, position) {
@@ -380,7 +380,7 @@ impl FindTarget for efmt::items::types::FunctionType {
     }
 }
 
-impl FindTarget for efmt::items::types::RecordType {
+impl FindTarget for efmt_core::items::types::RecordType {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if self.name().contains(position) {
             let target = Target {
@@ -405,7 +405,7 @@ impl FindTarget for efmt::items::types::RecordType {
     }
 }
 
-impl FindTarget for efmt::items::types::MapType {
+impl FindTarget for efmt_core::items::types::MapType {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         self.items().find_map(|(k, v)| {
             k.find_target_if_contains(text, position)
@@ -414,7 +414,7 @@ impl FindTarget for efmt::items::types::MapType {
     }
 }
 
-impl FindTarget for efmt::items::types::LiteralType {
+impl FindTarget for efmt_core::items::types::LiteralType {
     fn find_target(&self, _text: &str, position: Position) -> Option<Target> {
         match self {
             Self::Variable(x) => {
@@ -433,7 +433,7 @@ impl FindTarget for efmt::items::types::LiteralType {
     }
 }
 
-impl FindTarget for efmt::items::types::MfargsType {
+impl FindTarget for efmt_core::items::types::MfargsType {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if let Some(module_name) = self.module_name() {
             if module_name.contains(position) {
@@ -462,7 +462,7 @@ impl FindTarget for efmt::items::types::MfargsType {
     }
 }
 
-impl FindTarget for efmt::items::types::TupleType {
+impl FindTarget for efmt_core::items::types::TupleType {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         self.items()
             .1
@@ -470,20 +470,20 @@ impl FindTarget for efmt::items::types::TupleType {
     }
 }
 
-impl FindTarget for efmt::items::types::ListType {
+impl FindTarget for efmt_core::items::types::ListType {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         self.item_type()
             .and_then(|item| item.find_target_if_contains(text, position))
     }
 }
 
-impl FindTarget for efmt::items::Expr {
+impl FindTarget for efmt_core::items::Expr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         self.get().find_target_if_contains(text, position)
     }
 }
 
-impl FindTarget for efmt::items::expressions::FullExpr {
+impl FindTarget for efmt_core::items::expressions::FullExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         match self {
             Self::Base(x) => x.find_target_if_contains(text, position),
@@ -493,7 +493,7 @@ impl FindTarget for efmt::items::expressions::FullExpr {
     }
 }
 
-impl FindTarget for efmt::items::expressions::BaseExpr {
+impl FindTarget for efmt_core::items::expressions::BaseExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         match self {
             Self::List(x) => x.find_target_if_contains(text, position),
@@ -512,7 +512,7 @@ impl FindTarget for efmt::items::expressions::BaseExpr {
     }
 }
 
-impl<A: FindTarget, B: FindTarget> FindTarget for efmt::items::Either<A, B> {
+impl<A: FindTarget, B: FindTarget> FindTarget for efmt_core::items::Either<A, B> {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         match self {
             Self::A(x) => x.find_target(text, position),
@@ -527,34 +527,34 @@ impl<'a, A: FindTarget> FindTarget for &'a A {
     }
 }
 
-impl FindTarget for efmt::items::expressions::BlockExpr {
+impl FindTarget for efmt_core::items::expressions::BlockExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         self.children()
             .find_map(|child| child.find_target_if_contains(text, position))
     }
 }
 
-impl FindTarget for efmt::items::expressions::BitstringExpr {
+impl FindTarget for efmt_core::items::expressions::BitstringExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         self.children()
             .find_map(|child| child.find_target_if_contains(text, position))
     }
 }
 
-impl FindTarget for efmt::items::expressions::MapUpdateExpr {
+impl FindTarget for efmt_core::items::expressions::MapUpdateExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         self.children()
             .find_map(|child| child.find_target_if_contains(text, position))
     }
 }
 
-impl FindTarget for efmt::items::expressions::UnaryOpCallExpr {
+impl FindTarget for efmt_core::items::expressions::UnaryOpCallExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         self.expr().find_target_if_contains(text, position)
     }
 }
 
-impl FindTarget for efmt::items::expressions::FunctionExpr {
+impl FindTarget for efmt_core::items::expressions::FunctionExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if let Some(x) = self.module_name() {
             if x.contains(position) {
@@ -581,20 +581,20 @@ impl FindTarget for efmt::items::expressions::FunctionExpr {
     }
 }
 
-impl FindTarget for efmt::items::expressions::MapExpr {
+impl FindTarget for efmt_core::items::expressions::MapExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         self.children()
             .find_map(|x| x.find_target_if_contains(text, position))
     }
 }
 
-impl FindTarget for efmt::items::expressions::ParenthesizedExpr {
+impl FindTarget for efmt_core::items::expressions::ParenthesizedExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         self.get().find_target_if_contains(text, position)
     }
 }
 
-impl FindTarget for efmt::items::expressions::RecordConstructOrIndexExpr {
+impl FindTarget for efmt_core::items::expressions::RecordConstructOrIndexExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if self.record_name().contains(position) {
             let target = Target {
@@ -619,7 +619,7 @@ impl FindTarget for efmt::items::expressions::RecordConstructOrIndexExpr {
     }
 }
 
-impl FindTarget for efmt::items::expressions::RecordAccessOrUpdateExpr {
+impl FindTarget for efmt_core::items::expressions::RecordAccessOrUpdateExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if self.record_name().contains(position) {
             let target = Target {
@@ -644,21 +644,21 @@ impl FindTarget for efmt::items::expressions::RecordAccessOrUpdateExpr {
     }
 }
 
-impl FindTarget for efmt::items::expressions::TupleExpr {
+impl FindTarget for efmt_core::items::expressions::TupleExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         self.children()
             .find_map(|x| x.find_target_if_contains(text, position))
     }
 }
 
-impl FindTarget for efmt::items::expressions::ListExpr {
+impl FindTarget for efmt_core::items::expressions::ListExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         self.children()
             .find_map(|x| x.find_target_if_contains(text, position))
     }
 }
 
-impl FindTarget for efmt::items::expressions::FunctionCallExpr {
+impl FindTarget for efmt_core::items::expressions::FunctionCallExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if let Some(x) = self.module_expr() {
             if let Some(x) = x.as_atom_token() {
@@ -697,14 +697,14 @@ impl FindTarget for efmt::items::expressions::FunctionCallExpr {
     }
 }
 
-impl FindTarget for efmt::items::expressions::BinaryOpCallExpr {
+impl FindTarget for efmt_core::items::expressions::BinaryOpCallExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         self.children()
             .find_map(|child| child.find_target_if_contains(text, position))
     }
 }
 
-impl FindTarget for efmt::items::expressions::LiteralExpr {
+impl FindTarget for efmt_core::items::expressions::LiteralExpr {
     fn find_target(&self, _text: &str, position: Position) -> Option<Target> {
         match self {
             Self::Variable(x) => {

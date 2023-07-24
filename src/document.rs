@@ -41,13 +41,13 @@ impl Text {
         Self { lines }
     }
 
-    pub fn to_efmt_position(&self, position: Position) -> efmt::span::Position {
+    pub fn to_efmt_position(&self, position: Position) -> efmt_core::span::Position {
         let mut offset = 0;
         for line in self.lines.iter().take(position.line) {
             offset += line.len() + 1;
         }
         offset += position.character;
-        efmt::span::Position::new(offset, position.line + 1, position.character + 1)
+        efmt_core::span::Position::new(offset, position.line + 1, position.character + 1)
     }
 
     pub fn apply_change(&mut self, mut range: Range, text: &str) -> orfail::Result<()> {

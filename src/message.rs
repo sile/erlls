@@ -361,7 +361,7 @@ impl Range {
         Self { start, end }
     }
 
-    pub fn from_efmt_range(range: std::ops::Range<efmt::span::Position>) -> Self {
+    pub fn from_efmt_range(range: std::ops::Range<efmt_core::span::Position>) -> Self {
         let start = Position::new(
             range.start.line() as usize - 1,
             range.start.column() as usize - 1,
