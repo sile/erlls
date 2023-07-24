@@ -124,16 +124,14 @@ impl FindTarget for efmt_core::items::forms::Form {
 impl FindDefinition for efmt_core::items::forms::Form {
     fn find_definition(&self, text: &str, item: &ItemKind) -> Option<ItemRange> {
         match self {
-            Self::TypeDecl(x) => x.find_definition(text, item),
             Self::Module(x) => x.find_definition(text, item),
-             _ => None
-            // Self::Define(_) => todo!(),
-            // Self::FunSpec(_) => todo!(),
-            // Self::FunDecl(_) => todo!(),
-            // Self::RecordDecl(_) => todo!(),
-            // Self::Export(_) => todo!(),
-            // Self::Include(_) | Self::Attr(_) => None,
+            Self::TypeDecl(x) => x.find_definition(text, item),
+            Self::FunDecl(x) => x.find_definition(text, item),
+            Self::FunSpec(_) | Self::Export(_) | Self::Include(_) | Self::Attr(_) => None,
+            _ => None,
         }
+        // Self::Define(_) => todo!(),
+        // Self::RecordDecl(_) => todo!(),
     }
 }
 
@@ -210,11 +208,12 @@ impl FindTarget for efmt_core::items::forms::FunDecl {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         for clause in self.clauses() {
             if clause.function_name().contains(position) {
-                let target = Target {
-                    name: clause.function_name().value().to_owned(),
-                    kind: ItemKind::FunctionName,
-                    position: clause.function_name().start_position(),
-                };
+                let target = Target::function_name(
+                    clause.function_name().start_position(),
+                    None,
+                    clause.function_name().value().to_owned(),
+                    clause.params().len(),
+                );
                 return Some(target);
             }
             for expr in clause.children() {
@@ -227,6 +226,23 @@ impl FindTarget for efmt_core::items::forms::FunDecl {
     }
 }
 
+impl FindDefinition for efmt_core::items::forms::FunDecl {
+    fn find_definition(&self, _text: &str, item: &ItemKind) -> Option<ItemRange> {
+        let ItemKind::FunctionName(mfa) = item else {
+            return None;
+        };
+
+        let clause = self.clauses().next()?;
+        if clause.function_name().value() != mfa.name {
+            return None;
+        }
+        if clause.params().len() != mfa.arity {
+            return None;
+        }
+        Some(item_range(clause.function_name()))
+    }
+}
+
 impl FindTarget for efmt_core::items::forms::FunSpec {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if let Some(name) = self.module_name() {
@@ -236,11 +252,12 @@ impl FindTarget for efmt_core::items::forms::FunSpec {
             }
         }
         if self.function_name().contains(position) {
-            let target = Target {
-                name: self.function_name().value().to_owned(),
-                kind: ItemKind::FunctionName,
-                position: self.function_name().start_position(),
-            };
+            let target = Target::function_name(
+                self.function_name().start_position(),
+                self.module_name().map(|x| x.value().to_owned()),
+                self.function_name().value().to_owned(),
+                self.clauses().next()?.params().len(),
+            );
             return Some(target);
         }
         for ty in self.clauses().flat_map(|x| {
@@ -571,12 +588,20 @@ impl FindTarget for efmt_core::items::expressions::FunctionExpr {
         }
         if let Some(x) = self.function_name() {
             if x.contains(position) {
-                let target = Target {
-                    name: x.value().to_owned(),
-                    kind: ItemKind::FunctionName,
-                    position: x.start_position(),
-                };
-                return Some(target);
+                if let Some(arity) = self.arity().and_then(|x| {
+                    x.as_integer_token()
+                        .and_then(|x| x.text(text).parse::<usize>().ok())
+                }) {
+                    let target = Target::function_name(
+                        x.start_position(),
+                        self.module_name().map(|x| x.value().to_owned()),
+                        x.value().to_owned(),
+                        arity,
+                    );
+                    return Some(target);
+                } else {
+                    return None;
+                }
             }
         }
         self.children()
@@ -676,11 +701,20 @@ impl FindTarget for efmt_core::items::expressions::FunctionCallExpr {
         }
         if let Some(x) = self.function_expr().as_atom_token() {
             if x.contains(position) {
-                let target = Target {
-                    name: x.value().to_owned(),
-                    kind: ItemKind::FunctionName,
-                    position: x.start_position(),
+                if self
+                    .module_expr()
+                    .map_or(false, |x| x.as_atom_token().is_none())
+                {
+                    return None;
                 };
+                let target = Target::function_name(
+                    x.start_position(),
+                    self.module_expr()
+                        .and_then(|x| x.as_atom_token())
+                        .map(|x| x.value().to_owned()),
+                    x.value().to_owned(),
+                    self.args().len(),
+                );
                 return Some(target);
             }
         }
@@ -758,13 +792,17 @@ impl Target {
 
     pub fn function_name(
         position: Position,
-        _module: Option<String>,
+        module: Option<String>,
         name: String,
-        _arity: usize,
+        arity: usize,
     ) -> Self {
         Self {
             name: name.clone(),
-            kind: ItemKind::FunctionName,
+            kind: ItemKind::FunctionName(Mfa {
+                module,
+                name,
+                arity,
+            }),
             position,
         }
     }
@@ -781,8 +819,8 @@ pub struct Mfa {
 pub enum ItemKind {
     ModuleName { module: String },
     TypeName(Mfa),
-    FunctionName, // TODO: module, name, arity
-    MacroName,    // TODO: option<arity>
+    FunctionName(Mfa),
+    MacroName, // TODO: option<arity>
     RecordName,
     RecordFieldName, // TODO: record_namee, field_name
     Variable,
@@ -793,6 +831,7 @@ impl ItemKind {
         match self {
             Self::ModuleName { module } => Some(module),
             Self::TypeName(mfa) => mfa.module.as_ref().map(|x| x.as_str()),
+            Self::FunctionName(mfa) => mfa.module.as_ref().map(|x| x.as_str()),
             _ => None,
         }
     }
@@ -856,15 +895,15 @@ bar() ->
             assert_rename_target!(54, 54, "A", Variable, i, tree);
             assert_rename_target!(58, 58, "b", ModuleName { .. }, i, tree);
             assert_rename_target!(60, 60, "b", TypeName { .. }, i, tree);
-            assert_rename_target!(77, 79, "foo", FunctionName, i, tree);
+            assert_rename_target!(77, 79, "foo", FunctionName { .. }, i, tree);
             assert_rename_target!(81, 83, "foo", ModuleName { .. }, i, tree);
             assert_rename_target!(85, 87, "foo", TypeName { .. }, i, tree);
-            assert_rename_target!(99, 101, "foo", FunctionName, i, tree);
+            assert_rename_target!(99, 101, "foo", FunctionName { .. }, i, tree);
             assert_rename_target!(103, 103, "A", Variable, i, tree);
             assert_rename_target!(113, 113, "B", Variable, i, tree);
             assert_rename_target!(117, 117, "A", Variable, i, tree);
             assert_rename_target!(128, 129, "io", ModuleName { .. }, i, tree);
-            assert_rename_target!(131, 136, "format", FunctionName, i, tree);
+            assert_rename_target!(131, 136, "format", FunctionName { .. }, i, tree);
             assert_rename_target!(149, 149, "B", Variable, i, tree);
             assert_rename_target!(173, 178, "Record", Variable, i, tree);
             assert_rename_target!(180, 190, "record_name", RecordName, i, tree);
@@ -877,20 +916,20 @@ bar() ->
             assert_rename_target!(265, 265, "M", Variable, i, tree);
             assert_rename_target!(288, 288, "C", Variable, i, tree);
             assert_rename_target!(327, 329, "XXX", Variable, i, tree);
-            assert_rename_target!(334, 336, "baz", FunctionName, i, tree);
+            assert_rename_target!(334, 336, "baz", FunctionName { .. }, i, tree);
             assert_rename_target!(338, 340, "XXX", Variable, i, tree);
-            assert_rename_target!(370, 372, "foo", FunctionName, i, tree);
+            assert_rename_target!(370, 372, "foo", FunctionName { .. }, i, tree);
             assert_rename_target!(393, 395, "foo", TypeName { .. }, i, tree);
             assert_rename_target!(411, 413, "rec", RecordName, i, tree);
             assert_rename_target!(418, 420, "aaa", RecordFieldName, i, tree);
-            assert_rename_target!(424, 426, "bbb", FunctionName, i, tree);
+            assert_rename_target!(424, 426, "bbb", FunctionName { .. }, i, tree);
             assert_rename_target!(433, 435, "foo", TypeName { .. }, i, tree);
             assert_rename_target!(452, 454, "FOO", MacroName, i, tree);
             assert_rename_target!(474, 476, "BAR", MacroName, i, tree);
-            assert_rename_target!(489, 491, "bar", FunctionName, i, tree);
+            assert_rename_target!(489, 491, "bar", FunctionName { .. }, i, tree);
             assert_rename_target!(503, 505, "FOO", MacroName, i, tree);
             assert_rename_target!(510, 512, "BAR", MacroName, i, tree);
-            assert_rename_target!(514, 516, "bbb", FunctionName, i, tree);
+            assert_rename_target!(514, 516, "bbb", FunctionName { .. }, i, tree);
 
             assert_eq!(None, tree.find_target(offset(i)));
         }
