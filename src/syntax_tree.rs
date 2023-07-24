@@ -50,11 +50,11 @@ impl SyntaxTree {
             return None;
         }
         if macro_call.macro_name().contains(position) {
-            let target = Target {
-                name: macro_call.macro_name().value().to_owned(),
-                kind: ItemKind::MacroName,
-                position: macro_call.macro_name().start_position(),
-            };
+            let target = Target::macro_name(
+                macro_call.macro_name().start_position(),
+                macro_call.macro_name().value().to_owned(),
+                macro_call.arity(),
+            );
             return Some(target);
         }
         if let Some(target) = macro_call
@@ -127,10 +127,10 @@ impl FindDefinition for efmt_core::items::forms::Form {
             Self::Module(x) => x.find_definition(text, item),
             Self::TypeDecl(x) => x.find_definition(text, item),
             Self::FunDecl(x) => x.find_definition(text, item),
+            Self::Define(x) => x.find_definition(text, item),
             Self::FunSpec(_) | Self::Export(_) | Self::Include(_) | Self::Attr(_) => None,
             _ => None,
         }
-        // Self::Define(_) => todo!(),
         // Self::RecordDecl(_) => todo!(),
     }
 }
@@ -138,14 +138,31 @@ impl FindDefinition for efmt_core::items::forms::Form {
 impl FindTarget for efmt_core::items::forms::DefineDirective {
     fn find_target(&self, _text: &str, position: Position) -> Option<Target> {
         if self.macro_name_token().contains(position) {
-            let target = Target {
-                name: self.macro_name_token().value().to_owned(),
-                kind: ItemKind::MacroName,
-                position: self.macro_name_token().start_position(),
-            };
+            let target = Target::macro_name(
+                self.macro_name_token().start_position(),
+                self.macro_name_token().value().to_owned(),
+                self.variables().map(|x| x.len()),
+            );
             return Some(target);
         }
         None
+    }
+}
+
+impl FindDefinition for efmt_core::items::forms::DefineDirective {
+    fn find_definition(&self, _text: &str, item: &ItemKind) -> Option<ItemRange> {
+        let ItemKind::MacroName { name, arity } = item else {
+            return None;
+        };
+
+        if self.macro_name() != name {
+            return None;
+        }
+        if self.variables().map(|x| x.len()) != *arity {
+            return None;
+        }
+
+        Some(item_range(self.macro_name_token()))
     }
 }
 
@@ -806,8 +823,17 @@ impl Target {
             position,
         }
     }
+
+    pub fn macro_name(position: Position, name: String, arity: Option<usize>) -> Self {
+        Self {
+            name: name.clone(),
+            kind: ItemKind::MacroName { name, arity },
+            position,
+        }
+    }
 }
 
+// TODO: remove
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Mfa {
     pub module: Option<String>,
@@ -820,7 +846,7 @@ pub enum ItemKind {
     ModuleName { module: String },
     TypeName(Mfa),
     FunctionName(Mfa),
-    MacroName, // TODO: option<arity>
+    MacroName { name: String, arity: Option<usize> },
     RecordName,
     RecordFieldName, // TODO: record_namee, field_name
     Variable,
@@ -924,11 +950,11 @@ bar() ->
             assert_rename_target!(418, 420, "aaa", RecordFieldName, i, tree);
             assert_rename_target!(424, 426, "bbb", FunctionName { .. }, i, tree);
             assert_rename_target!(433, 435, "foo", TypeName { .. }, i, tree);
-            assert_rename_target!(452, 454, "FOO", MacroName, i, tree);
-            assert_rename_target!(474, 476, "BAR", MacroName, i, tree);
+            assert_rename_target!(452, 454, "FOO", MacroName { .. }, i, tree);
+            assert_rename_target!(474, 476, "BAR", MacroName { .. }, i, tree);
             assert_rename_target!(489, 491, "bar", FunctionName { .. }, i, tree);
-            assert_rename_target!(503, 505, "FOO", MacroName, i, tree);
-            assert_rename_target!(510, 512, "BAR", MacroName, i, tree);
+            assert_rename_target!(503, 505, "FOO", MacroName { .. }, i, tree);
+            assert_rename_target!(510, 512, "BAR", MacroName { .. }, i, tree);
             assert_rename_target!(514, 516, "bbb", FunctionName { .. }, i, tree);
 
             assert_eq!(None, tree.find_target(offset(i)));
