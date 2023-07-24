@@ -31,15 +31,18 @@ impl DefinitionProvider {
         let Some(target) = tree.find_target(efmt_position) else {
             return Err(ResponseError::request_failed().message("No definitions found"));
         };
+        log::debug!("target: {target:?}");
 
         let location = match &target.kind {
             ItemKind::TypeName(mfa) => self
                 .find_type_definition(mfa, params.text_document().uri.clone(), editing_documents)
-                .or_fail(),
+                .or_fail()?,
             _ => {
                 todo!("{target:?}")
             }
         };
+        log::debug!("location: {location:?}");
+
         let response = ResponseMessage::result(location).or_fail()?;
         Ok(response)
     }
@@ -54,8 +57,12 @@ impl DefinitionProvider {
             target_uri = self.resolve_module_uri(module).or_fail()?;
         }
 
-        let document = editing_documents.get(&target_uri).or_fail()?;
-        let tree = SyntaxTree::parse(document.text.to_string()).or_fail()?;
+        let text = if let Some(doc) = editing_documents.get(&target_uri) {
+            doc.text.to_string()
+        } else {
+            target_uri.read().or_fail()?
+        };
+        let tree = SyntaxTree::parse(text).or_fail()?;
         if let Some(range) = tree.find_definition(&ItemKind::TypeName(mfa.clone())) {
             Ok(Location::new(target_uri, Range::from_efmt_range(range)))
         } else {

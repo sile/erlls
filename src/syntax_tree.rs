@@ -20,7 +20,7 @@ impl SyntaxTree {
     }
 
     pub fn find_definition(&self, item: &ItemKind) -> Option<ItemRange> {
-        todo!()
+        self.module.find_definition(&self.ts.text(), item)
     }
 
     pub fn find_target(&mut self, position: Position) -> Option<Target> {
@@ -65,6 +65,10 @@ impl SyntaxTree {
     }
 }
 
+pub trait FindDefinition {
+    fn find_definition(&self, text: &str, item: &ItemKind) -> Option<ItemRange>;
+}
+
 pub trait FindTarget {
     fn find_target(&self, text: &str, position: Position) -> Option<Target>;
 
@@ -91,6 +95,13 @@ impl FindTarget for efmt::items::Module {
     }
 }
 
+impl FindDefinition for efmt::items::Module {
+    fn find_definition(&self, text: &str, item: &ItemKind) -> Option<ItemRange> {
+        self.children()
+            .find_map(|x| x.get().find_definition(text, item))
+    }
+}
+
 impl FindTarget for efmt::items::forms::Form {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         match self {
@@ -102,6 +113,22 @@ impl FindTarget for efmt::items::forms::Form {
             Self::RecordDecl(x) => x.find_target_if_contains(text, position),
             Self::Export(x) => x.find_target_if_contains(text, position),
             Self::Include(_) | Self::Attr(_) => None,
+        }
+    }
+}
+
+impl FindDefinition for efmt::items::forms::Form {
+    fn find_definition(&self, text: &str, item: &ItemKind) -> Option<ItemRange> {
+        match self {
+            Self::TypeDecl(x) => x.find_definition(text, item),
+            _ => None
+            // Self::Define(_) => todo!(),
+            // Self::FunSpec(_) => todo!(),
+            // Self::FunDecl(_) => todo!(),
+            // Self::RecordDecl(_) => todo!(),
+            // Self::Export(_) => todo!(),
+            // Self::Module(_) => todo!(),
+            // Self::Include(_) | Self::Attr(_) => None,
         }
     }
 }
@@ -251,6 +278,24 @@ impl FindTarget for efmt::items::forms::TypeDecl {
             }
         }
         self.type_value().find_target_if_contains(text, position)
+    }
+}
+
+impl FindDefinition for efmt::items::forms::TypeDecl {
+    fn find_definition(&self, _text: &str, item: &ItemKind) -> Option<ItemRange> {
+        let ItemKind::TypeName(mfa) = item else {
+            return None;
+        };
+        if self.type_name().value() != mfa.name {
+            return None;
+        }
+        if self.params().len() != mfa.arity {
+            return None;
+        }
+        Some(ItemRange {
+            start: self.type_name().start_position(),
+            end: self.type_name().end_position(),
+        })
     }
 }
 
