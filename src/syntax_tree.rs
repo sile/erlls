@@ -1,6 +1,9 @@
 use efmt_core::{items::Macro, parse::TokenStream, span::Position, span::Span};
 use erl_tokenize::Tokenizer;
 use orfail::OrFail;
+use std::path::{Component, PathBuf};
+
+use crate::message::DocumentUri;
 
 pub type ItemRange = std::ops::Range<Position>;
 
@@ -21,6 +24,22 @@ impl SyntaxTree {
         let mut ts = TokenStream::new(tokenizer);
         let module: efmt_core::items::Module = ts.parse().or_fail()?;
         Ok(Self { ts, module })
+    }
+
+    pub fn collect_includes(&self) -> Vec<Include> {
+        self.module
+            .children()
+            .filter_map(|form| {
+                if let efmt_core::items::forms::Form::Include(x) = form.get() {
+                    Some(Include {
+                        is_lib: x.is_include_lib(),
+                        path: PathBuf::from(x.include_path()),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     pub fn find_definition(&self, item: &Target) -> Option<ItemRange> {
@@ -148,16 +167,18 @@ impl FindTarget for efmt_core::items::forms::DefineDirective {
 
 impl FindDefinition for efmt_core::items::forms::DefineDirective {
     fn find_definition(&self, _text: &str, item: &Target) -> Option<ItemRange> {
-        let Target::Macro { macro_name, arity, .. } = item else {
+        let Target::Macro { macro_name, .. } = item else {
             return None;
         };
 
         if self.macro_name() != macro_name {
             return None;
         }
-        if self.variables().map(|x| x.len()) != *arity {
-            return None;
-        }
+
+        // TODO: Add NOTE about why the following code is commented out.
+        // if self.variables().map(|x| x.len()) != *arity {
+        //     return None;
+        // }
 
         Some(item_range(self.macro_name_token()))
     }
@@ -852,6 +873,67 @@ impl Target {
             Target::RecordField { position, .. } => *position,
             Target::Variable { position, .. } => *position,
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Include {
+    pub is_lib: bool,
+    pub path: PathBuf,
+}
+
+impl Include {
+    pub fn resolve_document_uri(&self, current_uri: &DocumentUri) -> Option<DocumentUri> {
+        let current = current_uri.to_path_buf();
+        if self.is_lib {
+            // Get the value of ERL_LIBS environment var
+            let Ok(erl_libs) = std::env::var("ERL_LIBS") else {
+                return None;
+            };
+
+            let mut include_path_components = self.path.components();
+            let target_app_name = include_path_components.next().and_then(|x| {
+                if let Component::Normal(x) = x {
+                    x.to_str()
+                } else {
+                    None
+                }
+            })?;
+            for lib_dir in erl_libs.split(&[':', ';'][..]) {
+                for app_dir in std::fs::read_dir(lib_dir)
+                    .ok()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|entry| entry.ok())
+                    .map(|entry| entry.path())
+                    .filter(|path| path.is_dir())
+                {
+                    let app_name = app_dir
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .and_then(|namd_and_version| namd_and_version.splitn(2, '-').next());
+                    if app_name != Some(target_app_name) {
+                        continue;
+                    }
+
+                    let path = app_dir.join(include_path_components.as_path());
+                    if path.exists() {
+                        return DocumentUri::from_path(path).ok();
+                    }
+                }
+            }
+        } else {
+            let path = current.parent()?.join(&self.path);
+            if path.exists() {
+                return DocumentUri::from_path(path).ok();
+            }
+
+            let path = current.parent()?.parent()?.join("include").join(&self.path);
+            if path.exists() {
+                return DocumentUri::from_path(path).ok();
+            }
+        }
+        None
     }
 }
 

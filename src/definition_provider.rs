@@ -5,7 +5,7 @@ use crate::{
     syntax_tree::{SyntaxTree, Target},
 };
 use orfail::OrFail;
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 #[derive(Debug)]
 pub struct DefinitionProvider {
@@ -33,26 +33,9 @@ impl DefinitionProvider {
         };
         log::debug!("target: {target:?}");
 
-        let location = self
-            .find_definition(
-                target,
-                params.text_document().uri.clone(),
-                editing_documents,
-            )
-            .or_fail()?;
-        log::debug!("location: {location:?}");
-
-        let response = ResponseMessage::result(location).or_fail()?;
-        Ok(response)
-    }
-
-    fn find_definition(
-        &self,
-        item: Target,
-        mut target_uri: DocumentUri,
-        editing_documents: &EditingDocuments,
-    ) -> orfail::Result<Location> {
-        match &item {
+        // TODO: rename
+        let mut target_uri = params.text_document().uri.clone();
+        match &target {
             Target::Module { module_name, .. }
             | Target::Function {
                 module_name: Some(module_name),
@@ -67,21 +50,54 @@ impl DefinitionProvider {
             _ => {}
         }
 
+        let location = self
+            .find_definition(&target, target_uri, editing_documents, &mut HashSet::new())
+            .or_fail()?;
+        log::debug!("location: {location:?}");
+
+        let response = ResponseMessage::result(location).or_fail()?;
+        Ok(response)
+    }
+
+    fn find_definition(
+        &self,
+        target: &Target,
+        target_uri: DocumentUri, // TODO: rename
+        editing_documents: &EditingDocuments,
+        visited: &mut HashSet<DocumentUri>,
+    ) -> orfail::Result<Location> {
         let text = if let Some(doc) = editing_documents.get(&target_uri) {
             doc.text.to_string()
         } else {
             target_uri.read().or_fail()?
         };
         let tree = SyntaxTree::parse(text).or_fail()?;
-        if let Some(range) = tree.find_definition(&item) {
+        if let Some(range) = tree.find_definition(target) {
             Ok(Location::new(target_uri, Range::from_efmt_range(range)))
         } else {
-            // TODO: handle include
-            todo!()
+            visited.insert(target_uri.clone());
+
+            for include in tree.collect_includes() {
+                log::debug!("include: {include:?}");
+                if let Some(uri) = include.resolve_document_uri(&target_uri) {
+                    if visited.contains(&uri) {
+                        continue;
+                    }
+                    if let Ok(location) =
+                        self.find_definition(target, uri, editing_documents, visited)
+                    {
+                        return Ok(location);
+                    }
+                }
+            }
+
+            Err(orfail::Failure::new().message("No definitions found"))
         }
     }
 
     fn resolve_module_uri(&self, module: &str) -> orfail::Result<DocumentUri> {
+        // TODO: ERL_LIBS
+        // TODO: Find non src/ dirs (e.g., tests/)
         let path = self.root_dir.join(format!("src/{}.erl", module));
         path.exists()
             .or_fail()

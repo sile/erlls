@@ -122,6 +122,10 @@ impl DocumentUri {
         std::fs::read_to_string(self.0.path()).or_fail()
     }
 
+    pub fn to_path_buf(&self) -> PathBuf {
+        PathBuf::from(self.0.path())
+    }
+
     pub fn to_existing_path_buf(&self) -> orfail::Result<PathBuf> {
         (self.0.scheme() == "file")
             .or_fail()
