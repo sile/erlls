@@ -886,7 +886,6 @@ impl Include {
     pub fn resolve_document_uri(&self, current_uri: &DocumentUri) -> Option<DocumentUri> {
         let current = current_uri.to_path_buf();
         if self.is_lib {
-            // Get the value of ERL_LIBS environment var
             let Ok(erl_libs) = std::env::var("ERL_LIBS") else {
                 return None;
             };

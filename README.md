@@ -7,7 +7,7 @@ Features List
 -------------
 
 - General features:
-  - [ ] Parse editing (incomplete) source code
+  - [ ] Error tolerant parser
   - [ ] `-include()`
   - [ ] `ERL_LIBS`
 - LSP features:

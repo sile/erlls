@@ -96,12 +96,34 @@ impl DefinitionProvider {
     }
 
     fn resolve_module_uri(&self, module: &str) -> orfail::Result<DocumentUri> {
-        // TODO: ERL_LIBS
-        // TODO: Find non src/ dirs (e.g., tests/)
         let path = self.root_dir.join(format!("src/{}.erl", module));
-        path.exists()
-            .or_fail()
-            .map_err(|f| f.message(format!("Path not found: {path:?}")))?;
-        DocumentUri::from_path(path).or_fail()
+        if path.exists() {
+            return DocumentUri::from_path(path).or_fail();
+        }
+
+        let path = self.root_dir.join(format!("tests/{}.erl", module));
+        if path.exists() {
+            return DocumentUri::from_path(path).or_fail();
+        }
+
+        if let Ok(erl_libs) = std::env::var("ERL_LIBS") {
+            for lib_dir in erl_libs.split(&[':', ';'][..]) {
+                for app_dir in std::fs::read_dir(lib_dir)
+                    .ok()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|entry| entry.ok())
+                    .map(|entry| entry.path())
+                    .filter(|path| path.is_dir())
+                {
+                    let path = app_dir.join(format!("src/{}.erl", module));
+                    if path.exists() {
+                        return DocumentUri::from_path(path).or_fail();
+                    }
+                }
+            }
+        }
+
+        Err(orfail::Failure::new().message(format!("Module not found: {module:?}")))
     }
 }
