@@ -31,9 +31,9 @@ checksum = "50d30906286121d95be3d479533b458f87493b30a4b5f79a607db8f5d11aa91f"
 
 [[package]]
 name = "efmt_core"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32156b76b49e688f9481c3305803cf6b273cb54586bd9913cb9e62bfb667faf2"
+checksum = "5d177a4c4e46204f53202ef7bb5474d0d0e16dea69d33b85852b20aa6fbaa1bc"
 dependencies = [
  "efmt_derive",
  "erl_tokenize",

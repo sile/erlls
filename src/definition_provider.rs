@@ -2,7 +2,7 @@ use crate::{
     document::EditingDocuments,
     error::ResponseError,
     message::{DefinitionParams, DocumentUri, Location, Range, ResponseMessage},
-    syntax_tree::{ItemKind, SyntaxTree},
+    syntax_tree::{SyntaxTree, Target},
 };
 use orfail::OrFail;
 use std::path::PathBuf;
@@ -35,7 +35,7 @@ impl DefinitionProvider {
 
         let location = self
             .find_definition(
-                target.kind,
+                target,
                 params.text_document().uri.clone(),
                 editing_documents,
             )
@@ -48,12 +48,23 @@ impl DefinitionProvider {
 
     fn find_definition(
         &self,
-        item: ItemKind,
+        item: Target,
         mut target_uri: DocumentUri,
         editing_documents: &EditingDocuments,
     ) -> orfail::Result<Location> {
-        if let Some(module) = item.module() {
-            target_uri = self.resolve_module_uri(module).or_fail()?;
+        match &item {
+            Target::Module { module_name, .. }
+            | Target::Function {
+                module_name: Some(module_name),
+                ..
+            }
+            | Target::Type {
+                module_name: Some(module_name),
+                ..
+            } => {
+                target_uri = self.resolve_module_uri(module_name).or_fail()?;
+            }
+            _ => {}
         }
 
         let text = if let Some(doc) = editing_documents.get(&target_uri) {
