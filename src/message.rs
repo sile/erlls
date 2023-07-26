@@ -112,8 +112,13 @@ impl DocumentUri {
     }
 
     pub fn from_path<P: AsRef<Path>>(path: P) -> orfail::Result<Self> {
-        let url = url::Url::from_file_path(path)
-            .map_err(|()| Failure::new().message("DocumentUri::from_path() failed"))
+        let url = url::Url::from_file_path(path.as_ref().canonicalize().or_fail()?)
+            .map_err(|()| {
+                Failure::new().message(format!(
+                    "DocumentUri::from_path({:?}) failed",
+                    path.as_ref().display()
+                ))
+            })
             .or_fail()?;
         Ok(Self(url))
     }

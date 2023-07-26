@@ -134,7 +134,10 @@ impl FindTarget for efmt_core::items::forms::Form {
             Self::Define(x) => x.find_target_if_contains(text, position),
             Self::RecordDecl(x) => x.find_target_if_contains(text, position),
             Self::Export(x) => x.find_target_if_contains(text, position),
-            Self::Include(_) | Self::Attr(_) => None,
+            Self::Include(_) | Self::Attr(_) => {
+                // TODO: handle `-behaviour()` or `-behavior()`
+                None
+            }
         }
     }
 }
