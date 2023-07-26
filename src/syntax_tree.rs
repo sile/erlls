@@ -33,7 +33,7 @@ impl SyntaxTree {
                 if let efmt_core::items::forms::Form::Include(x) = form.get() {
                     Some(Include {
                         is_lib: x.is_include_lib(),
-                        path: PathBuf::from(x.include_path()),
+                        path: PathBuf::from(x.include_path().value()),
                     })
                 } else {
                     None
@@ -87,6 +87,8 @@ impl SyntaxTree {
     }
 }
 
+// TODO: struct FindDefinitionOptions { ignore_arity: bool }
+
 pub trait FindDefinition {
     fn find_definition(&self, text: &str, item: &Target) -> Option<ItemRange>;
 }
@@ -134,11 +136,42 @@ impl FindTarget for efmt_core::items::forms::Form {
             Self::Define(x) => x.find_target_if_contains(text, position),
             Self::RecordDecl(x) => x.find_target_if_contains(text, position),
             Self::Export(x) => x.find_target_if_contains(text, position),
-            Self::Include(_) | Self::Attr(_) => {
-                // TODO: handle `-behaviour()` or `-behavior()`
-                None
-            }
+            Self::Attr(x) => x.find_target_if_contains(text, position),
+            Self::Include(x) => x.find_target_if_contains(text, position),
         }
+    }
+}
+
+impl FindTarget for efmt_core::items::forms::Attr {
+    fn find_target(&self, _text: &str, position: Position) -> Option<Target> {
+        if matches!(self.name(), "behaviour" | "behavior") {
+            return self
+                .values()
+                .iter()
+                .find(|x| x.contains(position))
+                .and_then(|x| {
+                    x.as_atom().map(|name| Target::Module {
+                        position: x.start_position(),
+                        module_name: name.to_owned(),
+                    })
+                });
+        }
+        None
+    }
+}
+
+impl FindTarget for efmt_core::items::forms::IncludeDirective {
+    fn find_target(&self, _text: &str, position: Position) -> Option<Target> {
+        if !self.include_path().contains(position) {
+            return None;
+        }
+        Some(Target::Include {
+            position: self.include_path().start_position(),
+            include: Include {
+                is_lib: self.is_include_lib(),
+                path: PathBuf::from(self.include_path().value()),
+            },
+        })
     }
 }
 
@@ -815,7 +848,7 @@ impl FindTarget for efmt_core::items::expressions::LiteralExpr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub enum Target {
     Module {
         position: Position,
@@ -851,9 +884,14 @@ pub enum Target {
         position: Position,
         variable_name: String,
     },
+    Include {
+        position: Position,
+        include: Include,
+    },
 }
 
 impl Target {
+    #[cfg(test)]
     pub fn name(&self) -> &str {
         match self {
             Target::Module { module_name, .. } => module_name,
@@ -863,6 +901,7 @@ impl Target {
             Target::Record { record_name, .. } => record_name,
             Target::RecordField { field_name, .. } => field_name,
             Target::Variable { variable_name, .. } => variable_name,
+            Target::Include { include, .. } => unreachable!(),
         }
     }
 
@@ -875,6 +914,7 @@ impl Target {
             Target::Record { position, .. } => *position,
             Target::RecordField { position, .. } => *position,
             Target::Variable { position, .. } => *position,
+            Target::Include { position, .. } => *position,
         }
     }
 }

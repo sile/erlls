@@ -47,6 +47,15 @@ impl DefinitionProvider {
             } => {
                 target_uri = self.resolve_module_uri(module_name).or_fail()?;
             }
+            Target::Include { include, .. } => {
+                return include
+                    .resolve_document_uri(&target_uri)
+                    .map(|uri| Location::new(uri, Range::beginning()))
+                    .and_then(|location| ResponseMessage::result(location).ok())
+                    .ok_or_else(|| {
+                        ResponseError::request_failed().message("No definitions found")
+                    });
+            }
             _ => {}
         }
 
