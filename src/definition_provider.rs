@@ -26,8 +26,12 @@ impl DefinitionProvider {
             .get(&params.text_document().uri)
             .or_fail()?;
         let position = params.position();
-        let mut tree = SyntaxTree::parse(document.text.to_string()).or_fail()?;
         let efmt_position = document.text.to_efmt_position(position);
+        let mut tree = SyntaxTree::parse(document.text.to_string())
+            .or_else(|err| {
+                SyntaxTree::partial_parse(document.text.to_string(), efmt_position).map_err(|_| err)
+            })
+            .or_fail()?;
         let Some(target) = tree.find_target(efmt_position) else {
             return Err(ResponseError::request_failed().message("No definitions found"));
         };
@@ -96,7 +100,7 @@ impl DefinitionProvider {
         } else {
             target_uri.read().or_fail()?
         };
-        let tree = SyntaxTree::parse(text).or_fail()?;
+        let tree = SyntaxTree::parse_as_much_as_possible(text).or_fail()?;
         if let Some(range) = tree.find_definition(target, strict) {
             Ok(Location::new(target_uri, Range::from_efmt_range(range)))
         } else {

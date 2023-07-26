@@ -1,11 +1,20 @@
 use efmt_core::{items::Macro, parse::TokenStream, span::Position, span::Span};
-use erl_tokenize::Tokenizer;
+use erl_tokenize::{values::Symbol, Tokenizer};
 use orfail::OrFail;
 use std::path::{Component, PathBuf};
 
 use crate::message::DocumentUri;
 
 pub type ItemRange = std::ops::Range<Position>;
+
+type ExprOrMaybeFunCall = efmt_core::items::Either<
+    (
+        efmt_core::items::tokens::AtomToken,
+        efmt_core::items::symbols::ColonSymbol,
+        efmt_core::items::Maybe<efmt_core::items::tokens::AtomToken>,
+    ),
+    efmt_core::items::Expr,
+>;
 
 fn item_range<T: Span>(item: &T) -> ItemRange {
     item.start_position()..item.end_position()
@@ -14,7 +23,9 @@ fn item_range<T: Span>(item: &T) -> ItemRange {
 #[derive(Debug)]
 pub struct SyntaxTree {
     ts: TokenStream,
-    module: efmt_core::items::Module,
+    module: Option<efmt_core::items::Module>,
+    maybe_partial_module: Option<efmt_core::items::Module<true>>,
+    expr: Option<ExprOrMaybeFunCall>,
 }
 
 impl SyntaxTree {
@@ -23,12 +34,82 @@ impl SyntaxTree {
         // TODO: tokenizer.set_file(path);
         let mut ts = TokenStream::new(tokenizer);
         let module: efmt_core::items::Module = ts.parse().or_fail()?;
-        Ok(Self { ts, module })
+        Ok(Self {
+            ts,
+            module: Some(module),
+            maybe_partial_module: None,
+            expr: None,
+        })
+    }
+
+    // TODO: rename
+    pub fn parse_as_much_as_possible(text: String) -> orfail::Result<Self> {
+        let tokenizer = Tokenizer::new(text);
+        let mut ts = TokenStream::new(tokenizer);
+        let module: efmt_core::items::Module<true> = ts.parse().or_fail()?;
+        Ok(Self {
+            ts,
+            module: None,
+            maybe_partial_module: Some(module),
+            expr: None,
+        })
+    }
+
+    // TODO: rename
+    pub fn partial_parse(text: String, position: Position) -> orfail::Result<Self> {
+        use erl_tokenize::PositionRange;
+
+        // TODO: optimize (reduce text.clone() count)
+
+        let tokenizer = Tokenizer::new(text.clone());
+        let mut token_positions = Vec::new();
+        let mut passed = false;
+        for token in tokenizer {
+            let token = token.or_fail()?;
+            if !token.is_lexical_token() {
+                continue;
+            }
+
+            token_positions.push(token.start_position());
+            if position.offset() < token.start_position().offset() {
+                passed = true;
+            }
+            if token.as_symbol_token().map(|x| x.value()) == Some(Symbol::Dot) {
+                if passed {
+                    break;
+                } else {
+                    token_positions.clear();
+                }
+            }
+        }
+
+        let end_offset = token_positions.last().or_fail()?.offset() + 1;
+        for start_position in token_positions {
+            let mut tokenizer = Tokenizer::new(text[..end_offset].to_owned());
+            tokenizer.set_position(start_position);
+
+            let mut ts = TokenStream::new(tokenizer);
+            if let Ok(expr) = ts.parse::<ExprOrMaybeFunCall>() {
+                if !expr.contains(position) {
+                    continue;
+                }
+                return Ok(Self {
+                    ts,
+                    module: None,
+                    maybe_partial_module: None,
+                    expr: Some(expr),
+                });
+            }
+        }
+
+        Err(orfail::Failure::new().message("failed to parse"))
     }
 
     pub fn collect_includes(&self) -> Vec<Include> {
         self.module
-            .children()
+            .iter()
+            .flat_map(|x| x.children())
+            .chain(self.maybe_partial_module.iter().flat_map(|x| x.children()))
             .filter_map(|form| {
                 if let efmt_core::items::forms::Form::Include(x) = form.get() {
                     Some(Include {
@@ -46,7 +127,14 @@ impl SyntaxTree {
         let text = self.ts.text();
         let mut ctx = FindDefinitionContext::new(&text);
         ctx.check_arity = strict;
-        self.module.find_definition(&ctx, target)
+        self.module
+            .as_ref()
+            .and_then(|x| x.find_definition(&ctx, target))
+            .or_else(|| {
+                self.maybe_partial_module
+                    .as_ref()
+                    .and_then(|x| x.find_definition(&ctx, target))
+            })
     }
 
     pub fn find_target(&mut self, position: Position) -> Option<Target> {
@@ -62,8 +150,18 @@ impl SyntaxTree {
         }
         if let Some(macro_call) = candidate {
             self.find_target_macro_call(position, macro_call)
+        } else if let Some(module) = &self.module {
+            module.find_target(&self.ts.text(), position)
+        } else if let Some(module) = &self.maybe_partial_module {
+            module.find_target(&self.ts.text(), position)
+        } else if let Some(expr) = &self.expr {
+            let mut target = expr.find_target(&self.ts.text(), position)?;
+            if let Target::Function { maybe_type, .. } = &mut target {
+                *maybe_type = true;
+            }
+            Some(target)
         } else {
-            self.module.find_target(&self.ts.text(), position)
+            None
         }
     }
 
@@ -124,7 +222,9 @@ pub trait FindTarget {
     }
 }
 
-impl FindTarget for efmt_core::items::Module {
+impl<const ALLOW_PARTIAL_FAILURE: bool> FindTarget
+    for efmt_core::items::Module<ALLOW_PARTIAL_FAILURE>
+{
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         for form in self.children() {
             if let Some(target) = form.get().find_target_if_contains(text, position) {
@@ -135,7 +235,9 @@ impl FindTarget for efmt_core::items::Module {
     }
 }
 
-impl FindDefinition for efmt_core::items::Module {
+impl<const ALLOW_PARTIAL_FAILURE: bool> FindDefinition
+    for efmt_core::items::Module<ALLOW_PARTIAL_FAILURE>
+{
     fn find_definition(&self, ctx: &FindDefinitionContext, target: &Target) -> Option<ItemRange> {
         self.children()
             .find_map(|x| x.get().find_definition(ctx, target))
@@ -308,6 +410,7 @@ impl FindTarget for efmt_core::items::forms::ExportAttr {
                         module_name,
                         function_name: name,
                         arity,
+                        maybe_type: false,
                     }
                 } else {
                     Target::Type {
@@ -333,6 +436,7 @@ impl FindTarget for efmt_core::items::forms::FunDecl {
                     module_name: None,
                     function_name: clause.function_name().value().to_owned(),
                     arity: clause.params().len(),
+                    maybe_type: false,
                 });
             }
             for expr in clause.children() {
@@ -380,6 +484,7 @@ impl FindTarget for efmt_core::items::forms::FunSpec {
                 module_name: self.module_name().map(|x| x.value().to_owned()),
                 function_name: self.function_name().value().to_owned(),
                 arity: self.clauses().next()?.params().len(),
+                maybe_type: false,
             });
         }
         for ty in self.clauses().flat_map(|x| {
@@ -420,8 +525,17 @@ impl FindTarget for efmt_core::items::forms::TypeDecl {
 
 impl FindDefinition for efmt_core::items::forms::TypeDecl {
     fn find_definition(&self, ctx: &FindDefinitionContext, target: &Target) -> Option<ItemRange> {
-        let Target::Type{type_name, arity, ..} = target else {
-            return None;
+        let (type_name, arity) = match target {
+            Target::Type {
+                type_name, arity, ..
+            } => (type_name, arity),
+            Target::Function {
+                function_name,
+                arity,
+                maybe_type: true,
+                ..
+            } => (function_name, arity),
+            _ => return None,
         };
         if self.type_name().value() != type_name {
             return None;
@@ -612,6 +726,34 @@ impl FindTarget for efmt_core::items::types::ListType {
     }
 }
 
+impl FindTarget for ExprOrMaybeFunCall {
+    fn find_target(&self, text: &str, position: Position) -> Option<Target> {
+        match self {
+            Self::B(x) => x.find_target_if_contains(text, position),
+            Self::A((module_name, _, maybe_function_name)) => {
+                if module_name.contains(position) {
+                    return Some(Target::Module {
+                        position: module_name.start_position(),
+                        module_name: module_name.value().to_owned(),
+                    });
+                }
+                if let Some(function_name) = maybe_function_name.get() {
+                    if function_name.contains(position) {
+                        return Some(Target::Function {
+                            position: function_name.start_position(),
+                            module_name: Some(module_name.value().to_owned()),
+                            function_name: function_name.value().to_owned(),
+                            arity: 0,
+                            maybe_type: false,
+                        });
+                    }
+                }
+                None
+            }
+        }
+    }
+}
+
 impl FindTarget for efmt_core::items::Expr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         self.get().find_target_if_contains(text, position)
@@ -710,6 +852,7 @@ impl FindTarget for efmt_core::items::expressions::FunctionExpr {
                         module_name: self.module_name().map(|x| x.value().to_owned()),
                         function_name: x.value().to_owned(),
                         arity,
+                        maybe_type: false,
                     });
                 } else {
                     return None;
@@ -823,6 +966,7 @@ impl FindTarget for efmt_core::items::expressions::FunctionCallExpr {
                         .map(|x| x.value().to_owned()),
                     function_name: x.value().to_owned(),
                     arity: self.args().len(),
+                    maybe_type: false,
                 });
             }
         }
@@ -880,6 +1024,7 @@ pub enum Target {
         module_name: Option<String>,
         function_name: String,
         arity: usize,
+        maybe_type: bool,
     },
     Macro {
         position: Position,
