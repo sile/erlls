@@ -60,7 +60,22 @@ impl DefinitionProvider {
         }
 
         let location = self
-            .find_definition(&target, target_uri, editing_documents, &mut HashSet::new())
+            .find_definition(
+                &target,
+                target_uri.clone(),
+                editing_documents,
+                &mut HashSet::new(),
+                true,
+            )
+            .or_else(|_| {
+                self.find_definition(
+                    &target,
+                    target_uri,
+                    editing_documents,
+                    &mut HashSet::new(),
+                    false,
+                )
+            })
             .or_fail()?;
         log::debug!("location: {location:?}");
 
@@ -74,6 +89,7 @@ impl DefinitionProvider {
         target_uri: DocumentUri, // TODO: rename
         editing_documents: &EditingDocuments,
         visited: &mut HashSet<DocumentUri>,
+        strict: bool,
     ) -> orfail::Result<Location> {
         let text = if let Some(doc) = editing_documents.get(&target_uri) {
             doc.text.to_string()
@@ -81,7 +97,7 @@ impl DefinitionProvider {
             target_uri.read().or_fail()?
         };
         let tree = SyntaxTree::parse(text).or_fail()?;
-        if let Some(range) = tree.find_definition(target) {
+        if let Some(range) = tree.find_definition(target, strict) {
             Ok(Location::new(target_uri, Range::from_efmt_range(range)))
         } else {
             visited.insert(target_uri.clone());
@@ -93,7 +109,7 @@ impl DefinitionProvider {
                         continue;
                     }
                     if let Ok(location) =
-                        self.find_definition(target, uri, editing_documents, visited)
+                        self.find_definition(target, uri, editing_documents, visited, strict)
                     {
                         return Ok(location);
                     }

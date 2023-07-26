@@ -42,8 +42,11 @@ impl SyntaxTree {
             .collect()
     }
 
-    pub fn find_definition(&self, item: &Target) -> Option<ItemRange> {
-        self.module.find_definition(&self.ts.text(), item)
+    pub fn find_definition(&self, target: &Target, strict: bool) -> Option<ItemRange> {
+        let text = self.ts.text();
+        let mut ctx = FindDefinitionContext::new(&text);
+        ctx.check_arity = strict;
+        self.module.find_definition(&ctx, target)
     }
 
     pub fn find_target(&mut self, position: Position) -> Option<Target> {
@@ -87,10 +90,23 @@ impl SyntaxTree {
     }
 }
 
-// TODO: struct FindDefinitionOptions { ignore_arity: bool }
+#[derive(Debug)]
+pub struct FindDefinitionContext<'a> {
+    pub text: &'a str,
+    pub check_arity: bool,
+}
+
+impl<'a> FindDefinitionContext<'a> {
+    pub fn new(text: &'a str) -> Self {
+        Self {
+            text,
+            check_arity: true,
+        }
+    }
+}
 
 pub trait FindDefinition {
-    fn find_definition(&self, text: &str, item: &Target) -> Option<ItemRange>;
+    fn find_definition(&self, ctx: &FindDefinitionContext, target: &Target) -> Option<ItemRange>;
 }
 
 pub trait FindTarget {
@@ -120,9 +136,9 @@ impl FindTarget for efmt_core::items::Module {
 }
 
 impl FindDefinition for efmt_core::items::Module {
-    fn find_definition(&self, text: &str, item: &Target) -> Option<ItemRange> {
+    fn find_definition(&self, ctx: &FindDefinitionContext, target: &Target) -> Option<ItemRange> {
         self.children()
-            .find_map(|x| x.get().find_definition(text, item))
+            .find_map(|x| x.get().find_definition(ctx, target))
     }
 }
 
@@ -176,13 +192,13 @@ impl FindTarget for efmt_core::items::forms::IncludeDirective {
 }
 
 impl FindDefinition for efmt_core::items::forms::Form {
-    fn find_definition(&self, text: &str, item: &Target) -> Option<ItemRange> {
+    fn find_definition(&self, ctx: &FindDefinitionContext, target: &Target) -> Option<ItemRange> {
         match self {
-            Self::Module(x) => x.find_definition(text, item),
-            Self::TypeDecl(x) => x.find_definition(text, item),
-            Self::FunDecl(x) => x.find_definition(text, item),
-            Self::Define(x) => x.find_definition(text, item),
-            Self::RecordDecl(x) => x.find_definition(text, item),
+            Self::Module(x) => x.find_definition(ctx, target),
+            Self::TypeDecl(x) => x.find_definition(ctx, target),
+            Self::FunDecl(x) => x.find_definition(ctx, target),
+            Self::Define(x) => x.find_definition(ctx, target),
+            Self::RecordDecl(x) => x.find_definition(ctx, target),
             Self::FunSpec(_) | Self::Export(_) | Self::Include(_) | Self::Attr(_) => None,
         }
     }
@@ -202,8 +218,8 @@ impl FindTarget for efmt_core::items::forms::DefineDirective {
 }
 
 impl FindDefinition for efmt_core::items::forms::DefineDirective {
-    fn find_definition(&self, _text: &str, item: &Target) -> Option<ItemRange> {
-        let Target::Macro { macro_name, .. } = item else {
+    fn find_definition(&self, ctx: &FindDefinitionContext, target: &Target) -> Option<ItemRange> {
+        let Target::Macro { macro_name, arity, .. } = target else {
             return None;
         };
 
@@ -211,10 +227,9 @@ impl FindDefinition for efmt_core::items::forms::DefineDirective {
             return None;
         }
 
-        // TODO: Add NOTE about why the following code is commented out.
-        // if self.variables().map(|x| x.len()) != *arity {
-        //     return None;
-        // }
+        if ctx.check_arity && self.variables().map(|x| x.len()) != *arity {
+            return None;
+        }
 
         Some(item_range(self.macro_name_token()))
     }
@@ -254,8 +269,8 @@ impl FindTarget for efmt_core::items::forms::RecordDecl {
 }
 
 impl FindDefinition for efmt_core::items::forms::RecordDecl {
-    fn find_definition(&self, _text: &str, item: &Target) -> Option<ItemRange> {
-        let record_name = match item {
+    fn find_definition(&self, _ctx: &FindDefinitionContext, target: &Target) -> Option<ItemRange> {
+        let record_name = match target {
             Target::Record { record_name, .. } | Target::RecordField { record_name, .. } => {
                 record_name
             }
@@ -266,7 +281,7 @@ impl FindDefinition for efmt_core::items::forms::RecordDecl {
             return None;
         }
 
-        if let Target::RecordField { field_name, .. } = item {
+        if let Target::RecordField { field_name, .. } = target {
             for field in self.fields() {
                 if field.field_name().value() == field_name {
                     return Some(item_range(field.field_name()));
@@ -331,10 +346,10 @@ impl FindTarget for efmt_core::items::forms::FunDecl {
 }
 
 impl FindDefinition for efmt_core::items::forms::FunDecl {
-    fn find_definition(&self, _text: &str, item: &Target) -> Option<ItemRange> {
+    fn find_definition(&self, ctx: &FindDefinitionContext, target: &Target) -> Option<ItemRange> {
         // TODO: Handle `ItemKind::Variable`
 
-        let Target::Function{ function_name, arity, .. } = item else {
+        let Target::Function{ function_name, arity, .. } = target else {
             return None;
         };
 
@@ -342,7 +357,7 @@ impl FindDefinition for efmt_core::items::forms::FunDecl {
         if clause.function_name().value() != function_name {
             return None;
         }
-        if clause.params().len() != *arity {
+        if ctx.check_arity && clause.params().len() != *arity {
             return None;
         }
         Some(item_range(clause.function_name()))
@@ -404,14 +419,14 @@ impl FindTarget for efmt_core::items::forms::TypeDecl {
 }
 
 impl FindDefinition for efmt_core::items::forms::TypeDecl {
-    fn find_definition(&self, _text: &str, item: &Target) -> Option<ItemRange> {
-        let Target::Type{type_name, arity, ..} = item else {
+    fn find_definition(&self, ctx: &FindDefinitionContext, target: &Target) -> Option<ItemRange> {
+        let Target::Type{type_name, arity, ..} = target else {
             return None;
         };
         if self.type_name().value() != type_name {
             return None;
         }
-        if self.params().len() != *arity {
+        if ctx.check_arity && self.params().len() != *arity {
             return None;
         }
         Some(item_range(self.type_name()))
@@ -432,8 +447,8 @@ impl FindTarget for efmt_core::items::forms::ModuleAttr {
 }
 
 impl FindDefinition for efmt_core::items::forms::ModuleAttr {
-    fn find_definition(&self, _text: &str, item: &Target) -> Option<ItemRange> {
-        let Target::Module{ module_name, .. } = item else {
+    fn find_definition(&self, _ctx: &FindDefinitionContext, target: &Target) -> Option<ItemRange> {
+        let Target::Module{ module_name, .. } = target else {
             return None;
         };
         if self.module_name().value() != module_name {
