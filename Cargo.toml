@@ -14,5 +14,4 @@ serde = { version = "1.0.164", features = ["derive"] }
 serde_json = "1.0.100"
 
 [workspace]
-members = ["erlls_core"]
-
+members = ["erlls_core", "erlls_wasm"]

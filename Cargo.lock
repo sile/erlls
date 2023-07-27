@@ -102,6 +102,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "erlls_wasm"
+version = "0.1.0"
+dependencies = [
+ "erlls_core",
+ "orfail",
+]
+
+[[package]]
 name = "errno"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
