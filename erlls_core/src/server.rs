@@ -1,4 +1,5 @@
 use crate::{
+    config::Config,
     definition_provider::DefinitionProvider,
     document::{Document, EditingDocuments, Text},
     error::ResponseError,
@@ -13,18 +14,20 @@ use crate::{
 };
 use orfail::OrFail;
 use serde::Deserialize;
-use std::{marker::PhantomData, path::PathBuf};
+use std::marker::PhantomData;
 
 #[derive(Debug)]
 pub struct LanguageServer<FS> {
     state: Option<LanguageServerState<FS>>,
+    config: Config,
     _fs: PhantomData<FS>,
 }
 
 impl<FS: FileSystem> LanguageServer<FS> {
-    pub fn new() -> Self {
+    pub fn new(config: Config) -> Self {
         Self {
             state: None,
+            config,
             _fs: PhantomData,
         }
     }
@@ -117,16 +120,18 @@ impl<FS: FileSystem> LanguageServer<FS> {
         params: InitializeParams,
     ) -> Result<ResponseMessage, ResponseError> {
         let root_dir = params.root_uri.path().to_path_buf();
+        self.config.root_dir = root_dir;
+
         let state = LanguageServerState {
-            root_dir: root_dir.clone(),
+            config: self.config.clone(),
             documents: EditingDocuments::default(),
-            definition_provider: DefinitionProvider::new(root_dir),
+            definition_provider: DefinitionProvider::new(self.config.clone()),
             notifications: Vec::new(),
             _fs: PhantomData,
         };
 
         log::info!("Client: {:?}", params.client_info);
-        log::info!("Root dir: {:?}", state.root_dir);
+        log::info!("Server config: {:?}", state.config.root_dir);
         log::info!("Client capabilities: {:?}", params.capabilities);
 
         // Client capabilities check
@@ -151,7 +156,7 @@ impl<FS: FileSystem> LanguageServer<FS> {
 
 #[derive(Debug)]
 struct LanguageServerState<FS> {
-    root_dir: PathBuf,
+    config: Config,
     documents: EditingDocuments,
     definition_provider: DefinitionProvider<FS>,
     notifications: Vec<serde_json::Value>,

@@ -3,7 +3,7 @@ use erl_tokenize::{values::Symbol, Tokenizer};
 use orfail::OrFail;
 use std::path::{Component, PathBuf};
 
-use crate::{fs::FileSystem, message::DocumentUri};
+use crate::{config::Config, fs::FileSystem, message::DocumentUri};
 
 pub type ItemRange = std::ops::Range<Position>;
 
@@ -1085,13 +1085,10 @@ impl Include {
     pub fn resolve_document_uri<FS: FileSystem>(
         &self,
         current_uri: &DocumentUri,
+        config: &Config,
     ) -> Option<DocumentUri> {
         let current = current_uri.path().to_path_buf();
         if self.is_lib {
-            let Ok(erl_libs) = std::env::var("ERL_LIBS") else {
-                return None;
-            };
-
             let mut include_path_components = self.path.components();
             let target_app_name = include_path_components.next().and_then(|x| {
                 if let Component::Normal(x) = x {
@@ -1100,7 +1097,7 @@ impl Include {
                     None
                 }
             })?;
-            for lib_dir in erl_libs.split(&[':', ';'][..]) {
+            for lib_dir in &config.erl_libs {
                 for app_dir in FS::read_sub_dirs(&lib_dir).ok().into_iter().flatten() {
                     let app_name = app_dir
                         .file_name()

@@ -1,4 +1,5 @@
 use crate::{
+    config::Config,
     document::EditingDocuments,
     error::ResponseError,
     fs::FileSystem,
@@ -6,18 +7,18 @@ use crate::{
     syntax_tree::{SyntaxTree, Target},
 };
 use orfail::OrFail;
-use std::{collections::HashSet, marker::PhantomData, path::PathBuf};
+use std::{collections::HashSet, marker::PhantomData};
 
 #[derive(Debug)]
 pub struct DefinitionProvider<FS> {
-    root_dir: PathBuf,
+    config: Config,
     _fs: PhantomData<FS>,
 }
 
 impl<FS: FileSystem> DefinitionProvider<FS> {
-    pub fn new(root_dir: PathBuf) -> Self {
+    pub fn new(config: Config) -> Self {
         Self {
-            root_dir,
+            config,
             _fs: PhantomData,
         }
     }
@@ -58,7 +59,7 @@ impl<FS: FileSystem> DefinitionProvider<FS> {
             }
             Target::Include { include, .. } => {
                 return include
-                    .resolve_document_uri::<FS>(&target_uri)
+                    .resolve_document_uri::<FS>(&target_uri, &self.config)
                     .map(|uri| Location::new(uri, Range::beginning()))
                     .and_then(|location| ResponseMessage::result(location).ok())
                     .ok_or_else(|| {
@@ -113,7 +114,7 @@ impl<FS: FileSystem> DefinitionProvider<FS> {
 
             for include in tree.collect_includes() {
                 log::debug!("include: {include:?}");
-                if let Some(uri) = include.resolve_document_uri::<FS>(&target_uri) {
+                if let Some(uri) = include.resolve_document_uri::<FS>(&target_uri, &self.config) {
                     if visited.contains(&uri) {
                         continue;
                     }
@@ -130,24 +131,21 @@ impl<FS: FileSystem> DefinitionProvider<FS> {
     }
 
     fn resolve_module_uri(&self, module: &str) -> orfail::Result<DocumentUri> {
-        let path = self.root_dir.join(format!("src/{}.erl", module));
+        let path = self.config.root_dir.join(format!("src/{}.erl", module));
         if FS::exists(&path) {
             return DocumentUri::from_path(path).or_fail();
         }
 
-        let path = self.root_dir.join(format!("test/{}.erl", module));
+        let path = self.config.root_dir.join(format!("test/{}.erl", module));
         if FS::exists(&path) {
             return DocumentUri::from_path(path).or_fail();
         }
 
-        // TODO: Don't refer to envvar here to support WASM
-        if let Ok(erl_libs) = std::env::var("ERL_LIBS") {
-            for lib_dir in erl_libs.split(&[':', ';'][..]) {
-                for app_dir in FS::read_sub_dirs(lib_dir).ok().into_iter().flatten() {
-                    let path = app_dir.join(format!("src/{}.erl", module));
-                    if FS::exists(&path) {
-                        return DocumentUri::from_path(path).or_fail();
-                    }
+        for lib_dir in &self.config.erl_libs {
+            for app_dir in FS::read_sub_dirs(lib_dir).ok().into_iter().flatten() {
+                let path = app_dir.join(format!("src/{}.erl", module));
+                if FS::exists(&path) {
+                    return DocumentUri::from_path(path).or_fail();
                 }
             }
         }

@@ -1,3 +1,4 @@
+pub mod config;
 pub mod definition_provider;
 pub mod document;
 pub mod error;

@@ -1,5 +1,6 @@
 use erlls_core::{
-    error::ResponseError, header::Header, message::ResponseMessage, server::LanguageServer,
+    config::Config, error::ResponseError, header::Header, message::ResponseMessage,
+    server::LanguageServer,
 };
 use orfail::OrFail;
 use serde::Serialize;
@@ -11,7 +12,12 @@ use std::{
 fn main() -> orfail::Result<()> {
     env_logger::init();
 
-    let mut server = LanguageServer::<FileSystem>::new();
+    let mut config = Config::default();
+    if let Ok(erl_libs) = std::env::var("ERL_LIBS") {
+        config.erl_libs = erl_libs.split(&[':', ';'][..]).map(PathBuf::from).collect();
+    }
+
+    let mut server = LanguageServer::<FileSystem>::new(config);
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
     let mut stdin = stdin.lock();
