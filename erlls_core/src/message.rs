@@ -3,22 +3,12 @@ use orfail::OrFail;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+// TODO: rename
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Message {
     Request(RequestMessage),
     Notification(NotificationMessage),
-    Response(ResponseMessage),
-}
-
-impl Message {
-    pub fn method(&self) -> Option<&str> {
-        match self {
-            Message::Request(x) => Some(&x.method),
-            Message::Notification(x) => Some(&x.method),
-            Message::Response(_) => None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

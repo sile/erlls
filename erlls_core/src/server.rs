@@ -32,6 +32,7 @@ impl<FS: FileSystem> LanguageServer<FS> {
         }
     }
 
+    // TODO: rename to handle_incoming_message
     pub fn handle_message(&mut self, msg: Message) -> Option<ResponseMessage> {
         match msg {
             Message::Request(msg) => {
@@ -42,13 +43,10 @@ impl<FS: FileSystem> LanguageServer<FS> {
                 self.handle_notification(msg);
                 None
             }
-            Message::Response(msg) => {
-                self.handle_response(msg);
-                None
-            }
         }
     }
 
+    // TODO: take_outgoing_message
     pub fn take_notification(&mut self) -> Option<serde_json::Value> {
         self.state.as_mut()?.notifications.pop()
     }
@@ -109,10 +107,6 @@ impl<FS: FileSystem> LanguageServer<FS> {
         if let Err(e) = result {
             log::warn!("Failed to handle {:?} notification: reason={e}", msg.method);
         }
-    }
-
-    fn handle_response(&mut self, _msg: ResponseMessage) {
-        unreachable!()
     }
 
     fn handle_initialize_request(
