@@ -130,7 +130,7 @@ impl DefinitionProvider {
             return DocumentUri::from_path(path).or_fail();
         }
 
-        let path = self.root_dir.join(format!("tests/{}.erl", module));
+        let path = self.root_dir.join(format!("test/{}.erl", module));
         if path.exists() {
             return DocumentUri::from_path(path).or_fail();
         }

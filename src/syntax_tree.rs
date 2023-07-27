@@ -155,11 +155,7 @@ impl SyntaxTree {
         } else if let Some(module) = &self.maybe_partial_module {
             module.find_target(&self.ts.text(), position)
         } else if let Some(expr) = &self.expr {
-            let mut target = expr.find_target(&self.ts.text(), position)?;
-            if let Target::Function { maybe_type, .. } = &mut target {
-                *maybe_type = true;
-            }
-            Some(target)
+            expr.find_target(&self.ts.text(), position)
         } else {
             None
         }
