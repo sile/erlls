@@ -1,10 +1,7 @@
-#![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(improper_ctypes, clippy::not_unsafe_ptr_arg_deref)]
 
 use orfail::OrFail;
-use std::{
-    ffi::CStr,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct FileSystem;
@@ -24,30 +21,43 @@ impl erlls_core::fs::FileSystem for FileSystem {
 
     fn read_file<P: AsRef<Path>>(path: P) -> orfail::Result<String> {
         extern "C" {
-            fn fsReadFile(path: *const u8, path_len: u32) -> *const u8;
+            fn fsReadFile(path: *const u8, path_len: u32) -> *mut Vec<u8>;
         }
 
         let path = path.as_ref().to_str().or_fail()?;
-        unsafe {
-            let text_c_str = fsReadFile(path.as_ptr(), path.len() as u32);
-            if text_c_str.is_null() {
+        let vec = unsafe {
+            let vec_ptr = fsReadFile(path.as_ptr(), path.len() as u32);
+            if vec_ptr.is_null() {
                 return Err(orfail::Failure::new().message("Failed to read file"));
             }
-
-            let _text = CStr::from_ptr(text_c_str).to_str().or_fail()?;
-            todo!()
-            // .as_ref()
-            //     .map(|ptr| {
-            //         String::from_utf8_lossy(std::slice::from_raw_parts(ptr, path.len())).to_string()
-            //     })
-            //     .or_fail();
-        }
+            *Box::from_raw(vec_ptr)
+        };
+        Ok(String::from_utf8(vec).or_fail()?)
     }
 
     fn read_sub_dirs<P: AsRef<Path>>(path: P) -> orfail::Result<Vec<PathBuf>> {
-        todo!()
+        extern "C" {
+            fn fsReadSubDirs(path: *const u8, path_len: u32) -> *mut Vec<u8>;
+        }
+
+        let path = path.as_ref().to_str().or_fail()?;
+        let vec = unsafe {
+            let vec_ptr = fsReadSubDirs(path.as_ptr(), path.len() as u32);
+            if vec_ptr.is_null() {
+                return Err(orfail::Failure::new().message("Failed to read directory"));
+            }
+            *Box::from_raw(vec_ptr)
+        };
+        Ok(serde_json::from_slice(&vec).or_fail()?)
     }
 }
 
-#[derive(Debug)]
-pub struct Bytes {}
+#[no_mangle]
+pub fn vec_offset(v: *mut Vec<u8>) -> *mut u8 {
+    unsafe { &mut *v }.as_mut_ptr()
+}
+
+#[no_mangle]
+pub fn allocate_vec(len: i32) -> *mut Vec<u8> {
+    Box::into_raw(Box::new(vec![0; len as usize]))
+}

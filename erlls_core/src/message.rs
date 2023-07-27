@@ -1,5 +1,5 @@
 use crate::error::ResponseError;
-use orfail::{Failure, OrFail};
+use orfail::OrFail;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -117,19 +117,12 @@ pub enum RequestId {
 pub struct DocumentUri(url::Url);
 
 impl DocumentUri {
-    pub fn get(&self) -> &url::Url {
-        &self.0
-    }
-
     pub fn from_path<P: AsRef<Path>>(path: P) -> orfail::Result<Self> {
-        let url = url::Url::from_file_path(path.as_ref().canonicalize().or_fail()?)
-            .map_err(|()| {
-                Failure::new().message(format!(
-                    "DocumentUri::from_path({:?}) failed",
-                    path.as_ref().display()
-                ))
-            })
-            .or_fail()?;
+        let url = url::Url::parse(&format!(
+            "file://{}",
+            path.as_ref().canonicalize().or_fail()?.to_str().or_fail()?
+        ))
+        .or_fail()?;
         Ok(Self(url))
     }
 
