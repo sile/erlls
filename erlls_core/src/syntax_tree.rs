@@ -3,7 +3,7 @@ use erl_tokenize::{values::Symbol, Tokenizer};
 use orfail::OrFail;
 use std::path::{Component, PathBuf};
 
-use crate::message::DocumentUri;
+use crate::{fs::FileSystem, message::DocumentUri};
 
 pub type ItemRange = std::ops::Range<Position>;
 
@@ -1082,8 +1082,11 @@ pub struct Include {
 }
 
 impl Include {
-    pub fn resolve_document_uri(&self, current_uri: &DocumentUri) -> Option<DocumentUri> {
-        let current = current_uri.to_path_buf();
+    pub fn resolve_document_uri<FS: FileSystem>(
+        &self,
+        current_uri: &DocumentUri,
+    ) -> Option<DocumentUri> {
+        let current = current_uri.path().to_path_buf();
         if self.is_lib {
             let Ok(erl_libs) = std::env::var("ERL_LIBS") else {
                 return None;
@@ -1098,14 +1101,7 @@ impl Include {
                 }
             })?;
             for lib_dir in erl_libs.split(&[':', ';'][..]) {
-                for app_dir in std::fs::read_dir(lib_dir)
-                    .ok()
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|entry| entry.ok())
-                    .map(|entry| entry.path())
-                    .filter(|path| path.is_dir())
-                {
+                for app_dir in FS::read_sub_dirs(&lib_dir).ok().into_iter().flatten() {
                     let app_name = app_dir
                         .file_name()
                         .and_then(|name| name.to_str())
@@ -1115,19 +1111,19 @@ impl Include {
                     }
 
                     let path = app_dir.join(include_path_components.as_path());
-                    if path.exists() {
+                    if FS::exists(&path) {
                         return DocumentUri::from_path(path).ok();
                     }
                 }
             }
         } else {
             let path = current.parent()?.join(&self.path);
-            if path.exists() {
+            if FS::exists(&path) {
                 return DocumentUri::from_path(path).ok();
             }
 
             let path = current.parent()?.parent()?.join("include").join(&self.path);
-            if path.exists() {
+            if FS::exists(&path) {
                 return DocumentUri::from_path(path).ok();
             }
         }

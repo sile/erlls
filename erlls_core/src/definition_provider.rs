@@ -1,20 +1,25 @@
 use crate::{
     document::EditingDocuments,
     error::ResponseError,
+    fs::FileSystem,
     message::{DefinitionParams, DocumentUri, Location, Range, ResponseMessage},
     syntax_tree::{SyntaxTree, Target},
 };
 use orfail::OrFail;
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, marker::PhantomData, path::PathBuf};
 
 #[derive(Debug)]
-pub struct DefinitionProvider {
+pub struct DefinitionProvider<FS> {
     root_dir: PathBuf,
+    _fs: PhantomData<FS>,
 }
 
-impl DefinitionProvider {
+impl<FS: FileSystem> DefinitionProvider<FS> {
     pub fn new(root_dir: PathBuf) -> Self {
-        Self { root_dir }
+        Self {
+            root_dir,
+            _fs: PhantomData,
+        }
     }
 
     pub fn handle_request(
@@ -53,7 +58,7 @@ impl DefinitionProvider {
             }
             Target::Include { include, .. } => {
                 return include
-                    .resolve_document_uri(&target_uri)
+                    .resolve_document_uri::<FS>(&target_uri)
                     .map(|uri| Location::new(uri, Range::beginning()))
                     .and_then(|location| ResponseMessage::result(location).ok())
                     .ok_or_else(|| {
@@ -98,7 +103,7 @@ impl DefinitionProvider {
         let text = if let Some(doc) = editing_documents.get(&target_uri) {
             doc.text.to_string()
         } else {
-            target_uri.read().or_fail()?
+            FS::read_file(&target_uri.path()).or_fail()?
         };
         let tree = SyntaxTree::parse_as_much_as_possible(text).or_fail()?;
         if let Some(range) = tree.find_definition(target, strict) {
@@ -108,7 +113,7 @@ impl DefinitionProvider {
 
             for include in tree.collect_includes() {
                 log::debug!("include: {include:?}");
-                if let Some(uri) = include.resolve_document_uri(&target_uri) {
+                if let Some(uri) = include.resolve_document_uri::<FS>(&target_uri) {
                     if visited.contains(&uri) {
                         continue;
                     }
@@ -126,27 +131,21 @@ impl DefinitionProvider {
 
     fn resolve_module_uri(&self, module: &str) -> orfail::Result<DocumentUri> {
         let path = self.root_dir.join(format!("src/{}.erl", module));
-        if path.exists() {
+        if FS::exists(&path) {
             return DocumentUri::from_path(path).or_fail();
         }
 
         let path = self.root_dir.join(format!("test/{}.erl", module));
-        if path.exists() {
+        if FS::exists(&path) {
             return DocumentUri::from_path(path).or_fail();
         }
 
+        // TODO: Don't refer to envvar here to support WASM
         if let Ok(erl_libs) = std::env::var("ERL_LIBS") {
             for lib_dir in erl_libs.split(&[':', ';'][..]) {
-                for app_dir in std::fs::read_dir(lib_dir)
-                    .ok()
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|entry| entry.ok())
-                    .map(|entry| entry.path())
-                    .filter(|path| path.is_dir())
-                {
+                for app_dir in FS::read_sub_dirs(lib_dir).ok().into_iter().flatten() {
                     let path = app_dir.join(format!("src/{}.erl", module));
-                    if path.exists() {
+                    if FS::exists(&path) {
                         return DocumentUri::from_path(path).or_fail();
                     }
                 }

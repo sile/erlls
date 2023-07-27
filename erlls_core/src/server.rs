@@ -2,6 +2,7 @@ use crate::{
     definition_provider::DefinitionProvider,
     document::{Document, EditingDocuments, Text},
     error::ResponseError,
+    fs::FileSystem,
     message::{
         DefinitionParams, Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams,
         DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams,
@@ -13,16 +14,20 @@ use crate::{
 };
 use orfail::OrFail;
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::{marker::PhantomData, path::PathBuf};
 
-#[derive(Debug, Default)]
-pub struct LanguageServer {
-    state: Option<LanguageServerState>,
+#[derive(Debug)]
+pub struct LanguageServer<FS> {
+    state: Option<LanguageServerState<FS>>,
+    _fs: PhantomData<FS>,
 }
 
-impl LanguageServer {
+impl<FS: FileSystem> LanguageServer<FS> {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            state: None,
+            _fs: PhantomData,
+        }
     }
 
     pub fn handle_message(&mut self, msg: Message) -> Option<ResponseMessage> {
@@ -114,13 +119,14 @@ impl LanguageServer {
         &mut self,
         params: InitializeParams,
     ) -> Result<ResponseMessage, ResponseError> {
-        let root_dir = params.root_uri.to_existing_path_buf().or_fail()?;
+        let root_dir = params.root_uri.path().to_path_buf();
         let state = LanguageServerState {
             root_dir: root_dir.clone(),
             documents: EditingDocuments::default(),
             rename_handler: RenameHandler::new(root_dir.clone()),
             definition_provider: DefinitionProvider::new(root_dir),
             notifications: Vec::new(),
+            _fs: PhantomData,
         };
 
         log::info!("Client: {:?}", params.client_info);
@@ -148,15 +154,16 @@ impl LanguageServer {
 }
 
 #[derive(Debug)]
-struct LanguageServerState {
+struct LanguageServerState<FS> {
     root_dir: PathBuf,
     documents: EditingDocuments,
     rename_handler: RenameHandler,
-    definition_provider: DefinitionProvider,
+    definition_provider: DefinitionProvider<FS>,
     notifications: Vec<serde_json::Value>,
+    _fs: PhantomData<FS>,
 }
 
-impl LanguageServerState {
+impl<FS: FileSystem> LanguageServerState<FS> {
     fn handle_rename_request(
         &mut self,
         params: RenameParams,

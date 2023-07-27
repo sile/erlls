@@ -3,12 +3,15 @@ use erlls_core::{
 };
 use orfail::OrFail;
 use serde::Serialize;
-use std::io::{Read, Write};
+use std::{
+    io::{Read, Write},
+    path::{Path, PathBuf},
+};
 
 fn main() -> orfail::Result<()> {
     env_logger::init();
 
-    let mut server = LanguageServer::new();
+    let mut server = LanguageServer::<FileSystem>::new();
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
     let mut stdin = stdin.lock();
@@ -60,20 +63,20 @@ fn write_message<W: Write, T: Serialize>(
 struct FileSystem;
 
 impl erlls_core::fs::FileSystem for FileSystem {
-    fn exists(path: &str) -> bool {
-        std::path::Path::new(path).exists()
+    fn exists<P: AsRef<Path>>(path: P) -> bool {
+        path.as_ref().exists()
     }
 
-    fn read_file(path: &str) -> orfail::Result<String> {
+    fn read_file<P: AsRef<Path>>(path: P) -> orfail::Result<String> {
         std::fs::read_to_string(path).or_fail()
     }
 
-    fn read_sub_dirs(path: &str) -> orfail::Result<Vec<String>> {
+    fn read_sub_dirs<P: AsRef<Path>>(path: P) -> orfail::Result<Vec<PathBuf>> {
         let mut dirs = Vec::new();
         for entry in std::fs::read_dir(path).or_fail()? {
             let entry = entry.or_fail()?;
             if entry.file_type().or_fail()?.is_dir() {
-                dirs.push(entry.path().to_str().or_fail()?.to_owned());
+                dirs.push(entry.path());
             }
         }
         Ok(dirs)

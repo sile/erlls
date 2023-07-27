@@ -1,7 +1,7 @@
-use crate::error::{ErrorCode, ResponseError};
+use crate::error::ResponseError;
 use orfail::{Failure, OrFail};
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -133,23 +133,8 @@ impl DocumentUri {
         Ok(Self(url))
     }
 
-    pub fn read(&self) -> orfail::Result<String> {
-        std::fs::read_to_string(self.0.path()).or_fail()
-    }
-
-    pub fn to_path_buf(&self) -> PathBuf {
-        PathBuf::from(self.0.path())
-    }
-
-    pub fn to_existing_path_buf(&self) -> orfail::Result<PathBuf> {
-        (self.0.scheme() == "file")
-            .or_fail()
-            .map_err(|e| e.code(ErrorCode::INVALID_PARAMS.as_u32()))?;
-        let path = PathBuf::from(self.0.path());
-        path.exists()
-            .or_fail()
-            .map_err(|e| e.code(ErrorCode::INVALID_PARAMS.as_u32()))?;
-        Ok(path)
+    pub fn path(&self) -> &Path {
+        Path::new(self.0.path())
     }
 }
 
