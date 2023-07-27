@@ -35,6 +35,10 @@ fn main() -> orfail::Result<()> {
         if let Some(response) = response {
             write_message(&mut stdout, &response, &mut content_buf).or_fail()?;
         }
+
+        while let Some(notification) = server.take_notification() {
+            write_message(&mut stdout, &notification, &mut content_buf).or_fail()?;
+        }
     }
 }
 

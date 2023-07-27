@@ -3,10 +3,11 @@ use crate::{
     document::{Document, EditingDocuments, Text},
     error::ResponseError,
     message::{
-        DefinitionParams, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
-        DidOpenTextDocumentParams, DocumentFormattingParams, InitializeParams, InitializeResult,
-        InitializedParams, Message, NotificationMessage, PositionEncodingKind, RenameParams,
-        RequestMessage, ResponseMessage, TextEdit,
+        DefinitionParams, Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams,
+        DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams,
+        InitializeParams, InitializeResult, InitializedParams, Message, NotificationMessage,
+        PositionEncodingKind, PublishDiagnosticsParams, Range, RenameParams, RequestMessage,
+        ResponseMessage, TextEdit,
     },
     rename_handler::RenameHandler,
 };
@@ -39,6 +40,10 @@ impl LanguageServer {
                 None
             }
         }
+    }
+
+    pub fn take_notification(&mut self) -> Option<serde_json::Value> {
+        self.state.as_mut()?.notifications.pop()
     }
 
     fn handle_request(&mut self, msg: RequestMessage) -> ResponseMessage {
@@ -115,6 +120,7 @@ impl LanguageServer {
             documents: EditingDocuments::default(),
             rename_handler: RenameHandler::new(root_dir.clone()),
             definition_provider: DefinitionProvider::new(root_dir),
+            notifications: Vec::new(),
         };
 
         log::info!("Client: {:?}", params.client_info);
@@ -147,6 +153,7 @@ struct LanguageServerState {
     documents: EditingDocuments,
     rename_handler: RenameHandler,
     definition_provider: DefinitionProvider,
+    notifications: Vec<serde_json::Value>,
 }
 
 impl LanguageServerState {
@@ -177,7 +184,23 @@ impl LanguageServerState {
         let text = doc.text.to_string();
         let new_text = match efmt_core::format_text::<efmt_core::items::ModuleOrConfig>(&text) {
             Err(e) => {
-                return Err(ResponseError::request_failed().message(&e.to_string()));
+                // TODO: check client capabilities (e.g., "publishDiagnostics":{"relatedInformation":true,"tagSupport":{"valueSet":[1,2]},"versionSupport":true})
+                let diagnostic = Diagnostic {
+                    range: Range::from_parse_error(&e),
+                    message: e.to_string(),
+                    severity: Some(DiagnosticSeverity::ERROR),
+                };
+                let params = PublishDiagnosticsParams {
+                    uri: params.text_document.uri.clone(),
+                    diagnostics: vec![diagnostic],
+                    version: doc.version,
+                };
+                let notification =
+                    NotificationMessage::new("textDocument/publishDiagnostics", params)
+                        .or_fail()?;
+                self.notifications
+                    .push(serde_json::to_value(notification).or_fail()?);
+                return Err(ResponseError::request_failed().message("Failed to format"));
             }
             Ok(new_text) => new_text,
         };
@@ -247,6 +270,20 @@ impl LanguageServerState {
             .get_mut(&params.text_document.uri)
             .or_fail()?;
         doc.version = Some(params.text_document.version);
+
+        {
+            // TODO: Send the notification only if neeeded
+            let params = PublishDiagnosticsParams {
+                uri: params.text_document.uri.clone(),
+                diagnostics: vec![],
+                version: doc.version,
+            };
+            let notification =
+                NotificationMessage::new("textDocument/publishDiagnostics", params).or_fail()?;
+            self.notifications
+                .push(serde_json::to_value(notification).or_fail()?);
+        }
+
         log::info!("Before lines: {}", doc.text.lines.len());
         for change in params.content_changes {
             log::info!("Change: range={:?}", change.range);

@@ -11,7 +11,6 @@ Features List
   - [x] `-include()`
   - [x] `ERL_LIBS`
 - LSP features:
-  - [ ] textDocument/formatting
   - [ ] textDocument/definition
     - [x] Module
     - [x] Function
@@ -19,4 +18,8 @@ Features List
     - [x] Record
     - [x] Macro
     - [ ] Variable
-  - [ ] textDocument/rename
+    - [x] Include file
+  - [x] textDocument/formatting
+    - [x] Formatting by using `efmt`
+  - [ ] textDocument/publishDiagnostics
+    - [x] Formatting error

@@ -38,6 +38,16 @@ pub struct NotificationMessage {
     pub params: serde_json::Value,
 }
 
+impl NotificationMessage {
+    pub fn new(method: &str, params: impl Serialize) -> orfail::Result<Self> {
+        Ok(Self {
+            jsonrpc: JsonrpcVersion,
+            method: method.to_owned(),
+            params: serde_json::to_value(params).or_fail()?,
+        })
+    }
+}
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ResponseMessage {
     jsonrpc: JsonrpcVersion,
@@ -370,6 +380,27 @@ impl Range {
         Self { start, end }
     }
 
+    pub fn from_parse_error(e: &efmt_core::parse::Error) -> Self {
+        let (start, end) = match e {
+            efmt_core::parse::Error::UnexpectedEof { position, .. } => (
+                Position::new(position.line() - 1, 0),
+                Position::new(position.line() - 1, position.column()),
+            ),
+            efmt_core::parse::Error::UnexpectedToken { position, .. } => (
+                Position::new(position.line() - 1, 0),
+                Position::new(position.line() - 1, position.column()),
+            ),
+            efmt_core::parse::Error::TokenizeError { source, .. } => {
+                let position = source.position();
+                (
+                    Position::new(position.line() - 1, 0),
+                    Position::new(position.line() - 1, position.column()),
+                )
+            }
+        };
+        Self { start, end }
+    }
+
     pub fn beginning() -> Self {
         Self::new(Position::new(0, 0), Position::new(0, 0))
     }
@@ -439,4 +470,35 @@ impl Location {
     pub fn new(uri: DocumentUri, range: Range) -> Self {
         Self { uri, range }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Diagnostic {
+    pub range: Range,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub severity: Option<DiagnosticSeverity>,
+
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct DiagnosticSeverity(u8);
+
+impl DiagnosticSeverity {
+    pub const ERROR: Self = Self(1);
+    pub const WARNING: Self = Self(2);
+    pub const INFORMATION: Self = Self(3);
+    pub const HINT: Self = Self(4);
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishDiagnosticsParams {
+    pub uri: DocumentUri,
+    pub diagnostics: Vec<Diagnostic>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<i32>,
 }
