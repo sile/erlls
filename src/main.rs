@@ -1,4 +1,4 @@
-use erlls::{
+use erlls_core::{
     error::ResponseError, header::Header, message::ResponseMessage, server::LanguageServer,
 };
 use orfail::OrFail;

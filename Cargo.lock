@@ -80,8 +80,19 @@ dependencies = [
 name = "erlls"
 version = "0.1.0"
 dependencies = [
- "efmt_core",
  "env_logger",
+ "erlls_core",
+ "log",
+ "orfail",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "erlls_core"
+version = "0.1.0"
+dependencies = [
+ "efmt_core",
  "erl_tokenize",
  "log",
  "orfail",
