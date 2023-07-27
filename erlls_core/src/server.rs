@@ -7,10 +7,9 @@ use crate::{
         DefinitionParams, Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams,
         DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams,
         InitializeParams, InitializeResult, InitializedParams, Message, NotificationMessage,
-        PositionEncodingKind, PublishDiagnosticsParams, Range, RenameParams, RequestMessage,
-        ResponseMessage, TextEdit,
+        PositionEncodingKind, PublishDiagnosticsParams, Range, RequestMessage, ResponseMessage,
+        TextEdit,
     },
-    rename_handler::RenameHandler,
 };
 use orfail::OrFail;
 use serde::Deserialize;
@@ -63,8 +62,6 @@ impl<FS: FileSystem> LanguageServer<FS> {
             deserialize_params(msg.params).and_then(|params| self.handle_initialize_request(params))
         } else if let Some(state) = self.state.as_mut() {
             match msg.method.as_str() {
-                "textDocument/rename" => deserialize_params(msg.params)
-                    .and_then(|params| state.handle_rename_request(params)),
                 "textDocument/formatting" => deserialize_params(msg.params)
                     .and_then(|params| state.handle_formatting_request(params)),
                 "textDocument/definition" => deserialize_params(msg.params)
@@ -123,7 +120,6 @@ impl<FS: FileSystem> LanguageServer<FS> {
         let state = LanguageServerState {
             root_dir: root_dir.clone(),
             documents: EditingDocuments::default(),
-            rename_handler: RenameHandler::new(root_dir.clone()),
             definition_provider: DefinitionProvider::new(root_dir),
             notifications: Vec::new(),
             _fs: PhantomData,
@@ -157,20 +153,12 @@ impl<FS: FileSystem> LanguageServer<FS> {
 struct LanguageServerState<FS> {
     root_dir: PathBuf,
     documents: EditingDocuments,
-    rename_handler: RenameHandler,
     definition_provider: DefinitionProvider<FS>,
     notifications: Vec<serde_json::Value>,
     _fs: PhantomData<FS>,
 }
 
 impl<FS: FileSystem> LanguageServerState<FS> {
-    fn handle_rename_request(
-        &mut self,
-        params: RenameParams,
-    ) -> Result<ResponseMessage, ResponseError> {
-        self.rename_handler.handle(params, &self.documents)
-    }
-
     fn handle_shutdown_request(&mut self) -> Result<ResponseMessage, ResponseError> {
         Ok(ResponseMessage::default())
     }

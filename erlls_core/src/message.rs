@@ -218,7 +218,6 @@ impl Default for ServerInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerCapabilities {
-    pub rename_provider: bool,
     pub document_formatting_provider: bool,
     pub definition_provider: bool,
     pub text_document_sync: TextDocumentSyncKind,
@@ -228,7 +227,6 @@ pub struct ServerCapabilities {
 impl Default for ServerCapabilities {
     fn default() -> Self {
         Self {
-            rename_provider: true,
             document_formatting_provider: true,
             definition_provider: true,
             text_document_sync: TextDocumentSyncKind::INCREMENTAL,
@@ -266,14 +264,6 @@ impl TextDocumentItem {
     pub fn is_erlang(&self) -> bool {
         self.language_id == "erlang"
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RenameParams {
-    #[serde(flatten)]
-    pub text_document_position: TextDocumentPositionParams,
-    pub new_name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
