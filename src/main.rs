@@ -55,3 +55,27 @@ fn write_message<W: Write, T: Serialize>(
     log::debug!("Sent JSON: {}", std::str::from_utf8(&buf).or_fail()?);
     Ok(())
 }
+
+#[derive(Debug)]
+struct FileSystem;
+
+impl erlls_core::fs::FileSystem for FileSystem {
+    fn exists(path: &str) -> bool {
+        std::path::Path::new(path).exists()
+    }
+
+    fn read_file(path: &str) -> orfail::Result<String> {
+        std::fs::read_to_string(path).or_fail()
+    }
+
+    fn read_sub_dirs(path: &str) -> orfail::Result<Vec<String>> {
+        let mut dirs = Vec::new();
+        for entry in std::fs::read_dir(path).or_fail()? {
+            let entry = entry.or_fail()?;
+            if entry.file_type().or_fail()?.is_dir() {
+                dirs.push(entry.path().to_str().or_fail()?.to_owned());
+            }
+        }
+        Ok(dirs)
+    }
+}
