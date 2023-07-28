@@ -1,0 +1,60 @@
+{
+  "name": "erlls",
+  "displayName": "erlls",
+  "description": "Language Server for Erlang",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:erlang"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "erlang",
+        "aliases": [
+          "Erlang"
+        ],
+        "extensions": [
+          ".erl"
+        ],
+        "filenames": [
+          "rebar.config"
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "erlls.helloWorld",
+        "title": "Hello World"
+      }
+    ]
+  },
+  "main": "./out/extension.js",
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "20.2.5",
+    "@types/vscode": "^1.80.0",
+    "@typescript-eslint/eslint-plugin": "^5.59.8",
+    "@typescript-eslint/parser": "^5.59.8",
+    "@vscode/test-electron": "^2.3.2",
+    "eslint": "^8.41.0",
+    "glob": "^8.1.0",
+    "mocha": "^10.2.0",
+    "typescript": "^5.1.3",
+    "vscode-languageclient": "^8.1.0"
+  }
+}
