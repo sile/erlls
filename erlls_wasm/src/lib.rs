@@ -4,6 +4,10 @@ use erlls_core::{config::Config, server::LanguageServer};
 use orfail::OrFail;
 use std::path::{Path, PathBuf};
 
+extern "C" {
+    fn consoleLog(msg: *const u8, msg_len: u32);
+}
+
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ConfigDelta {
@@ -82,6 +86,13 @@ pub fn freeVec(v: *mut Vec<u8>) {
 
 #[no_mangle]
 pub fn newServer() -> *mut LanguageServer<FileSystem> {
+    std::panic::set_hook(Box::new(|info| {
+        let msg = info.to_string();
+        unsafe {
+            consoleLog(msg.as_ptr(), msg.len() as u32);
+        }
+    }));
+
     let config = Config::default();
     Box::into_raw(Box::new(LanguageServer::new(config)))
 }

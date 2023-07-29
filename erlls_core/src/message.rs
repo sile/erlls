@@ -213,7 +213,9 @@ impl Default for ServerCapabilities {
             document_formatting_provider: true,
             definition_provider: true,
             text_document_sync: TextDocumentSyncKind::INCREMENTAL,
-            position_encoding: PositionEncodingKind::Utf32,
+            position_encoding: PositionEncodingKind::Utf16,
+            // TODO:
+            // position_encoding: PositionEncodingKind::Utf32,
         }
     }
 }

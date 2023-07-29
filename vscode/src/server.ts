@@ -2,7 +2,6 @@ import * as fs from "fs";
 
 import {
     createConnection,
-    InitializeParams,
     InitializeResult,
 } from 'vscode-languageserver/node';
 
@@ -19,6 +18,14 @@ const connection = createConnection();
 async function initializeWasm() {
     const importOjbect = {
         env: {
+            consoleLog(msgOffset: number, msgLen: number) {
+                if (!wasmMemory) {
+                    return;
+                }
+                const msg = new TextDecoder('utf-8').decode(
+                    new Uint8Array(wasmMemory.buffer, msgOffset, msgLen));
+                connection.console.log(msg);
+            },
             fsExists(pathOffset: number, pathLen: number): boolean {
                 if (!wasmMemory) {
                     return false;
@@ -68,8 +75,7 @@ async function initializeWasm() {
 }
 
 async function handleIncomingMessage(
-    method: string,
-    params: any[] | object | undefined
+    message: object
 ): Promise<any[] | object | undefined> {
     if (!wasmInstance || !wasmMemory) {
         await initializeWasm();
@@ -77,13 +83,6 @@ async function handleIncomingMessage(
     if (!wasmInstance || !wasmMemory) {
         throw new Error("Failed to initialize wasm");
     }
-
-    const message = {
-        jsonrpc: "2.0",
-        id: 0, // dummy value
-        method,
-        params
-    };
     const messageJsonBytes = new TextEncoder().encode(JSON.stringify(message));
 
     const wasmMessagePtr =
@@ -91,8 +90,8 @@ async function handleIncomingMessage(
     const wasmMessageOffset =
         (wasmInstance.exports.vecOffset as CallableFunction)(wasmMessagePtr);
     new Uint8Array(wasmMemory.buffer, wasmMessageOffset, messageJsonBytes.length).set(messageJsonBytes);
-    (wasmInstance.exports.handleIncomingMessage as CallableFunction)(
-        serverPtr, wasmMessagePtr, messageJsonBytes.length);
+    (wasmInstance.exports.handleIncomingMessage as CallableFunction)(serverPtr, wasmMessagePtr);
+
 
     let resultParams: any[] | object | undefined = undefined;
     while (true) {
@@ -123,15 +122,34 @@ async function handleIncomingMessage(
     return resultParams;
 }
 
+connection.onInitialize(async (params) => {
+    const message = {
+        jsonrpc: "2.0",
+        id: 0, // dummy value
+        method: "initialize",
+        params
+    };
+    const resultParams = await handleIncomingMessage(message);
+    return resultParams as InitializeResult;
+});
+
 connection.onRequest(async (method, params) => {
-    connection.console.log("onRequest: " + method);
-    const resultParams = await handleIncomingMessage(method, params);
-    return resultParams;
+    const message = {
+        jsonrpc: "2.0",
+        id: 0, // dummy value
+        method,
+        params
+    };
+    return await handleIncomingMessage(message);
 });
 
 connection.onNotification(async (method, params) => {
-    connection.console.log("onNotification: " + method);
-    await handleIncomingMessage(method, params);
+    const message = {
+        jsonrpc: "2.0",
+        method,
+        params
+    };
+    await handleIncomingMessage(message);
 });
 
 connection.listen();

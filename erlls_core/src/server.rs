@@ -40,7 +40,6 @@ impl<FS: FileSystem> LanguageServer<FS> {
         let msg = match serde_json::from_slice(json) {
             Err(e) => {
                 log::warn!("Invalid message: {e}");
-                self.push_outgoing_message(ResponseMessage::error(ResponseError::from(e)));
                 return;
             }
             Ok(msg) => msg,
@@ -153,12 +152,14 @@ impl<FS: FileSystem> LanguageServer<FS> {
             .workspace_edit
             .document_changes
             .or_fail()?;
-        params
-            .capabilities
-            .general
-            .position_encodings
-            .contains(&PositionEncodingKind::Utf32)
-            .or_fail()?;
+
+        // TODO: support utf-16 for vscode
+        // params
+        //     .capabilities
+        //     .general
+        //     .position_encodings
+        //     .contains(&PositionEncodingKind::Utf32)
+        //     .or_fail()?;
 
         self.state = Some(state);
         Ok(ResponseMessage::result(InitializeResult::new()).or_fail()?)
