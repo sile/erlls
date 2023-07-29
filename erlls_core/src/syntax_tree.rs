@@ -1,11 +1,19 @@
+use crate::{config::Config, fs::FileSystem, message::DocumentUri};
 use efmt_core::{items::Macro, parse::TokenStream, span::Position, span::Span};
 use erl_tokenize::{values::Symbol, Tokenizer};
 use orfail::OrFail;
 use std::path::{Component, PathBuf};
 
-use crate::{config::Config, fs::FileSystem, message::DocumentUri};
-
 pub type ItemRange = std::ops::Range<Position>;
+
+trait ContainsInclusive: Span {
+    fn contains_inclusive(&self, position: Position) -> bool {
+        self.start_position().offset() <= position.offset()
+            && position.offset() <= self.end_position().offset()
+    }
+}
+
+impl<T: Span> ContainsInclusive for T {}
 
 type ExprOrMaybeFunCall = efmt_core::items::Either<
     (
@@ -16,8 +24,9 @@ type ExprOrMaybeFunCall = efmt_core::items::Either<
     efmt_core::items::Expr,
 >;
 
+// TODO: return position
 fn item_range<T: Span>(item: &T) -> ItemRange {
-    item.start_position()..item.end_position()
+    item.start_position()..item.start_position()
 }
 
 #[derive(Debug)]
@@ -90,7 +99,7 @@ impl SyntaxTree {
 
             let mut ts = TokenStream::new(tokenizer);
             if let Ok(expr) = ts.parse::<ExprOrMaybeFunCall>() {
-                if !expr.contains(position) {
+                if !expr.contains_inclusive(position) {
                     continue;
                 }
                 return Ok(Self {
@@ -140,7 +149,7 @@ impl SyntaxTree {
     pub fn find_target(&mut self, position: Position) -> Option<Target> {
         let mut candidate = None;
         for macro_call in self.ts.macros().values() {
-            if macro_call.contains(position) {
+            if macro_call.contains_inclusive(position) {
                 candidate = Some(macro_call.clone());
                 break;
             }
@@ -162,10 +171,10 @@ impl SyntaxTree {
     }
 
     fn find_target_macro_call(&mut self, position: Position, macro_call: Macro) -> Option<Target> {
-        if !macro_call.contains(position) {
+        if !macro_call.contains_inclusive(position) {
             return None;
         }
-        if macro_call.macro_name().contains(position) {
+        if macro_call.macro_name().contains_inclusive(position) {
             return Some(Target::Macro {
                 position: macro_call.macro_name().start_position(),
                 macro_name: macro_call.macro_name().value().to_owned(),
@@ -174,7 +183,7 @@ impl SyntaxTree {
         }
         if let Some(target) = macro_call
             .args()
-            .find(|x| x.contains(position))
+            .find(|x| x.contains_inclusive(position))
             .and_then(|x| x.parse_expr(&mut self.ts))
             .and_then(|x| x.find_target_if_contains(&self.ts.text(), position))
         {
@@ -210,7 +219,7 @@ pub trait FindTarget {
     where
         Self: Span,
     {
-        if self.contains(position) {
+        if self.contains_inclusive(position) {
             self.find_target(text, position)
         } else {
             None
@@ -262,7 +271,7 @@ impl FindTarget for efmt_core::items::forms::Attr {
             return self
                 .values()
                 .iter()
-                .find(|x| x.contains(position))
+                .find(|x| x.contains_inclusive(position))
                 .and_then(|x| {
                     x.as_atom().map(|name| Target::Module {
                         position: x.start_position(),
@@ -276,7 +285,7 @@ impl FindTarget for efmt_core::items::forms::Attr {
 
 impl FindTarget for efmt_core::items::forms::IncludeDirective {
     fn find_target(&self, _text: &str, position: Position) -> Option<Target> {
-        if !self.include_path().contains(position) {
+        if !self.include_path().contains_inclusive(position) {
             return None;
         }
         Some(Target::Include {
@@ -304,7 +313,7 @@ impl FindDefinition for efmt_core::items::forms::Form {
 
 impl FindTarget for efmt_core::items::forms::DefineDirective {
     fn find_target(&self, _text: &str, position: Position) -> Option<Target> {
-        if self.macro_name_token().contains(position) {
+        if self.macro_name_token().contains_inclusive(position) {
             return Some(Target::Macro {
                 position: self.macro_name_token().start_position(),
                 macro_name: self.macro_name_token().value().to_owned(),
@@ -335,14 +344,14 @@ impl FindDefinition for efmt_core::items::forms::DefineDirective {
 
 impl FindTarget for efmt_core::items::forms::RecordDecl {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
-        if self.record_name().contains(position) {
+        if self.record_name().contains_inclusive(position) {
             return Some(Target::Record {
                 position: self.record_name().start_position(),
                 record_name: self.record_name().value().to_owned(),
             });
         }
         for field in self.fields() {
-            if field.field_name().contains(position) {
+            if field.field_name().contains_inclusive(position) {
                 return Some(Target::RecordField {
                     position: field.field_name().start_position(),
                     record_name: self.record_name().value().to_owned(),
@@ -395,7 +404,7 @@ impl FindDefinition for efmt_core::items::forms::RecordDecl {
 impl FindTarget for efmt_core::items::forms::ExportAttr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         for e in self.exports() {
-            if e.name().contains(position) {
+            if e.name().contains_inclusive(position) {
                 let position = e.name().start_position();
                 let module_name = None;
                 let name = e.name().value().to_owned();
@@ -426,7 +435,7 @@ impl FindTarget for efmt_core::items::forms::ExportAttr {
 impl FindTarget for efmt_core::items::forms::FunDecl {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         for clause in self.clauses() {
-            if clause.function_name().contains(position) {
+            if clause.function_name().contains_inclusive(position) {
                 return Some(Target::Function {
                     position: clause.function_name().start_position(),
                     module_name: None,
@@ -467,14 +476,14 @@ impl FindDefinition for efmt_core::items::forms::FunDecl {
 impl FindTarget for efmt_core::items::forms::FunSpec {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if let Some(name) = self.module_name() {
-            if name.contains(position) {
+            if name.contains_inclusive(position) {
                 return Some(Target::Module {
                     position: name.start_position(),
                     module_name: name.value().to_owned(),
                 });
             }
         }
-        if self.function_name().contains(position) {
+        if self.function_name().contains_inclusive(position) {
             return Some(Target::Function {
                 position: self.function_name().start_position(),
                 module_name: self.module_name().map(|x| x.value().to_owned()),
@@ -499,7 +508,7 @@ impl FindTarget for efmt_core::items::forms::FunSpec {
 
 impl FindTarget for efmt_core::items::forms::TypeDecl {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
-        if self.type_name().contains(position) {
+        if self.type_name().contains_inclusive(position) {
             return Some(Target::Type {
                 position: self.type_name().start_position(),
                 module_name: None,
@@ -508,7 +517,7 @@ impl FindTarget for efmt_core::items::forms::TypeDecl {
             });
         }
         for param in self.params() {
-            if param.contains(position) && param.value() != "_" {
+            if param.contains_inclusive(position) && param.value() != "_" {
                 return Some(Target::Variable {
                     position: param.start_position(),
                     variable_name: param.value().to_owned(),
@@ -545,7 +554,7 @@ impl FindDefinition for efmt_core::items::forms::TypeDecl {
 
 impl FindTarget for efmt_core::items::forms::ModuleAttr {
     fn find_target(&self, _text: &str, position: Position) -> Option<Target> {
-        if self.module_name().contains(position) {
+        if self.module_name().contains_inclusive(position) {
             return Some(Target::Module {
                 position: self.module_name().start_position(),
                 module_name: self.module_name().value().to_owned(),
@@ -610,7 +619,7 @@ impl FindTarget for efmt_core::items::types::BinaryOpType {
 
 impl FindTarget for efmt_core::items::types::AnnotatedVariableType {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
-        if self.variable().contains(position) {
+        if self.variable().contains_inclusive(position) {
             return Some(Target::Variable {
                 position: self.variable().start_position(),
                 variable_name: self.variable().value().to_owned(),
@@ -634,14 +643,14 @@ impl FindTarget for efmt_core::items::types::FunctionType {
 
 impl FindTarget for efmt_core::items::types::RecordType {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
-        if self.name().contains(position) {
+        if self.name().contains_inclusive(position) {
             return Some(Target::Record {
                 position: self.name().start_position(),
                 record_name: self.name().value().to_owned(),
             });
         }
         self.fields().find_map(|(name, field)| {
-            if name.contains(position) {
+            if name.contains_inclusive(position) {
                 Some(Target::RecordField {
                     position: name.start_position(),
                     record_name: self.name().value().to_owned(),
@@ -667,7 +676,7 @@ impl FindTarget for efmt_core::items::types::LiteralType {
     fn find_target(&self, _text: &str, position: Position) -> Option<Target> {
         match self {
             Self::Variable(x) => {
-                if x.contains(position) {
+                if x.contains_inclusive(position) {
                     return Some(Target::Variable {
                         position: x.start_position(),
                         variable_name: x.value().to_owned(),
@@ -683,14 +692,14 @@ impl FindTarget for efmt_core::items::types::LiteralType {
 impl FindTarget for efmt_core::items::types::MfargsType {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if let Some(module_name) = self.module_name() {
-            if module_name.contains(position) {
+            if module_name.contains_inclusive(position) {
                 return Some(Target::Module {
                     position: module_name.start_position(),
                     module_name: module_name.value().to_owned(),
                 });
             }
         }
-        if self.type_name().contains(position) {
+        if self.type_name().contains_inclusive(position) {
             return Some(Target::Type {
                 position: self.type_name().start_position(),
                 module_name: self.module_name().map(|x| x.value().to_owned()),
@@ -727,14 +736,14 @@ impl FindTarget for ExprOrMaybeFunCall {
         match self {
             Self::B(x) => x.find_target_if_contains(text, position),
             Self::A((module_name, _, maybe_function_name)) => {
-                if module_name.contains(position) {
+                if module_name.contains_inclusive(position) {
                     return Some(Target::Module {
                         position: module_name.start_position(),
                         module_name: module_name.value().to_owned(),
                     });
                 }
                 if let Some(function_name) = maybe_function_name.get() {
-                    if function_name.contains(position) {
+                    if function_name.contains_inclusive(position) {
                         return Some(Target::Function {
                             position: function_name.start_position(),
                             module_name: Some(module_name.value().to_owned()),
@@ -830,7 +839,7 @@ impl FindTarget for efmt_core::items::expressions::UnaryOpCallExpr {
 impl FindTarget for efmt_core::items::expressions::FunctionExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if let Some(x) = self.module_name() {
-            if x.contains(position) {
+            if x.contains_inclusive(position) {
                 return Some(Target::Module {
                     position: x.start_position(),
                     module_name: x.value().to_owned(),
@@ -838,7 +847,7 @@ impl FindTarget for efmt_core::items::expressions::FunctionExpr {
             }
         }
         if let Some(x) = self.function_name() {
-            if x.contains(position) {
+            if x.contains_inclusive(position) {
                 if let Some(arity) = self.arity().and_then(|x| {
                     x.as_integer_token()
                         .and_then(|x| x.text(text).parse::<usize>().ok())
@@ -875,14 +884,14 @@ impl FindTarget for efmt_core::items::expressions::ParenthesizedExpr {
 
 impl FindTarget for efmt_core::items::expressions::RecordConstructOrIndexExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
-        if self.record_name().contains(position) {
+        if self.record_name().contains_inclusive(position) {
             return Some(Target::Record {
                 position: self.record_name().start_position(),
                 record_name: self.record_name().value().to_owned(),
             });
         }
         for field_name in self.field_names() {
-            if field_name.contains(position) {
+            if field_name.contains_inclusive(position) {
                 return Some(Target::RecordField {
                     position: field_name.start_position(),
                     record_name: self.record_name().value().to_owned(),
@@ -897,14 +906,14 @@ impl FindTarget for efmt_core::items::expressions::RecordConstructOrIndexExpr {
 
 impl FindTarget for efmt_core::items::expressions::RecordAccessOrUpdateExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
-        if self.record_name().contains(position) {
+        if self.record_name().contains_inclusive(position) {
             return Some(Target::Record {
                 position: self.record_name().start_position(),
                 record_name: self.record_name().value().to_owned(),
             });
         }
         for field_name in self.field_names() {
-            if field_name.contains(position) {
+            if field_name.contains_inclusive(position) {
                 return Some(Target::RecordField {
                     position: field_name.start_position(),
                     record_name: self.record_name().value().to_owned(),
@@ -935,7 +944,7 @@ impl FindTarget for efmt_core::items::expressions::FunctionCallExpr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         if let Some(x) = self.module_expr() {
             if let Some(x) = x.as_atom_token() {
-                if x.contains(position) {
+                if x.contains_inclusive(position) {
                     return Some(Target::Module {
                         position: x.start_position(),
                         module_name: x.value().to_owned(),
@@ -947,7 +956,7 @@ impl FindTarget for efmt_core::items::expressions::FunctionCallExpr {
             }
         }
         if let Some(x) = self.function_expr().as_atom_token() {
-            if x.contains(position) {
+            if x.contains_inclusive(position) {
                 if self
                     .module_expr()
                     .map_or(false, |x| x.as_atom_token().is_none())
@@ -989,7 +998,7 @@ impl FindTarget for efmt_core::items::expressions::LiteralExpr {
     fn find_target(&self, _text: &str, position: Position) -> Option<Target> {
         match self {
             Self::Variable(x) => {
-                if x.contains(position) && x.value() != "_" {
+                if x.contains_inclusive(position) && x.value() != "_" {
                     return Some(Target::Variable {
                         position: x.start_position(),
                         variable_name: x.value().to_owned(),

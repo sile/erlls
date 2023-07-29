@@ -108,11 +108,8 @@ pub struct DocumentUri(url::Url);
 
 impl DocumentUri {
     pub fn from_path<P: AsRef<Path>>(path: P) -> orfail::Result<Self> {
-        let url = url::Url::parse(&format!(
-            "file://{}",
-            path.as_ref().canonicalize().or_fail()?.to_str().or_fail()?
-        ))
-        .or_fail()?;
+        let url =
+            url::Url::parse(&format!("file://{}", path.as_ref().to_str().or_fail()?)).or_fail()?;
         Ok(Self(url))
     }
 
