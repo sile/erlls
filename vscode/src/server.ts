@@ -12,6 +12,7 @@ const wasmPath = args[0];
 const wasmBuffer = fs.readFileSync(wasmPath);
 let wasmMemory: WebAssembly.Memory | undefined;
 let wasmInstance: WebAssembly.Instance | undefined;
+let serverPtr: number = 0;
 
 const connection = createConnection();
 
@@ -35,7 +36,8 @@ async function initializeWasm() {
                 const data = fs.readFileSync(path);
 
                 const wasmDataPtr = (wasmInstance.exports.allocateVec as CallableFunction)(data.length);
-                new Uint8Array(wasmMemory.buffer, wasmDataPtr, data.length).set(data);
+                const wasmDataOffset = (wasmInstance.exports.vecOffset as CallableFunction)(wasmDataPtr);
+                new Uint8Array(wasmMemory.buffer, wasmDataOffset, data.length).set(data);
                 return wasmDataPtr;
             },
             fsReadSubDirs(pathOffset: number, pathLen: number): number {
@@ -51,41 +53,85 @@ async function initializeWasm() {
 
                 const data = new TextEncoder().encode(subDirsJson);
                 const wasmDataPtr = (wasmInstance.exports.allocateVec as CallableFunction)(data.length);
-                new Uint8Array(wasmMemory.buffer, wasmDataPtr, data.length).set(data);
+                const wasmDataOffset = (wasmInstance.exports.vecOffset as CallableFunction)(wasmDataPtr);
+                new Uint8Array(wasmMemory.buffer, wasmDataOffset, data.length).set(data);
                 return wasmDataPtr;
             },
         }
     };
     wasmInstance = (await WebAssembly.instantiate(wasmBuffer, importOjbect)).instance;
     wasmMemory = wasmInstance.exports.memory as WebAssembly.Memory;
-}
 
-connection.onInitialize(async (params: InitializeParams) => {
-    await initializeWasm();
-    connection.console.log("onInitialize: " + wasmPath);
-    connection.console.log(JSON.stringify(params));
+    serverPtr = (wasmInstance.exports.newServer as CallableFunction)();
 
     // TODO: updateConfig
+}
 
-    // const new TextEncoder().encode(JSON.stringify(params));
+async function handleIncomingMessage(
+    method: string,
+    params: any[] | object | undefined
+): Promise<any[] | object | undefined> {
+    if (!wasmInstance || !wasmMemory) {
+        await initializeWasm();
+    }
+    if (!wasmInstance || !wasmMemory) {
+        throw new Error("Failed to initialize wasm");
+    }
 
-    const result: InitializeResult = {
-        capabilities: {}
+    const message = {
+        jsonrpc: "2.0",
+        id: 0, // dummy value
+        method,
+        params
     };
+    const messageJsonBytes = new TextEncoder().encode(JSON.stringify(message));
 
-    // };
-    // if (hasWorkspaceFolderCapability) {
-    //     result.capabilities.workspace = {
-    //         workspaceFolders: {
-    //             supported: true
-    //         }
-    //     };
-    // }
-    return result;
+    const wasmMessagePtr =
+        (wasmInstance.exports.allocateVec as CallableFunction)(messageJsonBytes.length);
+    const wasmMessageOffset =
+        (wasmInstance.exports.vecOffset as CallableFunction)(wasmMessagePtr);
+    new Uint8Array(wasmMemory.buffer, wasmMessageOffset, messageJsonBytes.length).set(messageJsonBytes);
+    (wasmInstance.exports.handleIncomingMessage as CallableFunction)(
+        serverPtr, wasmMessagePtr, messageJsonBytes.length);
+
+    let resultParams: any[] | object | undefined = undefined;
+    while (true) {
+        const wasmOutgoingMessagePtr =
+            (wasmInstance.exports.takeOutgoingMessage as CallableFunction)(serverPtr);
+        if (wasmOutgoingMessagePtr === 0) {
+            break;
+        }
+
+        const wasmOutgoingMessageLen =
+            (wasmInstance.exports.vecLen as CallableFunction)(wasmOutgoingMessagePtr);
+        const wasmOutgoingMessageOffset =
+            (wasmInstance.exports.vecOffset as CallableFunction)(wasmOutgoingMessagePtr);
+        const outgoingMessageJson = new TextDecoder().decode(
+            new Uint8Array(wasmMemory.buffer, wasmOutgoingMessageOffset, wasmOutgoingMessageLen));
+        const outgoingMessage = JSON.parse(outgoingMessageJson);
+        if (outgoingMessage.id !== undefined) {
+            if (outgoingMessage.result) {
+                resultParams = outgoingMessage.result;
+            } else if (outgoingMessage.error) {
+                resultParams = outgoingMessage.error;
+            }
+        } else {
+            connection.sendNotification(outgoingMessage.method, outgoingMessage.params);
+        }
+    }
+
+    return resultParams;
+}
+
+connection.onRequest(async (method, params) => {
+    connection.console.log("onRequest: " + method);
+    const resultParams = await handleIncomingMessage(method, params);
+    return resultParams;
 });
 
-connection.onInitialized(() => {
-    connection.console.log("onInitialized");
+connection.onNotification(async (method, params) => {
+    connection.console.log("onNotification: " + method);
+    await handleIncomingMessage(method, params);
 });
 
 connection.listen();
