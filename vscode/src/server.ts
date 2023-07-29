@@ -10,30 +10,64 @@ import {
 const args = process.argv.slice(2);
 const wasmPath = args[0];
 const wasmBuffer = fs.readFileSync(wasmPath);
+let wasmMemory: WebAssembly.Memory | undefined;
+let wasmInstance: WebAssembly.Instance | undefined;
 
 const connection = createConnection();
 
-connection.onInitialize(async (params: InitializeParams) => {
-    connection.console.log("onInitialize: " + wasmPath);
-    connection.console.log(JSON.stringify(params));
-
+async function initializeWasm() {
     const importOjbect = {
         env: {
-            fsExists(pathPtr: number, pathLen: number): boolean {
-                // TODO
-                return false;
+            fsExists(pathOffset: number, pathLen: number): boolean {
+                if (!wasmMemory) {
+                    return false;
+                }
+                const path = new TextDecoder('utf-8').decode(
+                    new Uint8Array(wasmMemory.buffer, pathOffset, pathLen));
+                return fs.existsSync(path);
             },
-            fsReadFile(pathPtr: number, pathLen: number): number {
-                return 0;
+            fsReadFile(pathOffset: number, pathLen: number): number {
+                if (!wasmMemory || !wasmInstance) {
+                    return 0;
+                }
+                const path = new TextDecoder('utf-8').decode(
+                    new Uint8Array(wasmMemory.buffer, pathOffset, pathLen));
+                const data = fs.readFileSync(path);
+
+                const wasmDataPtr = (wasmInstance.exports.allocateVec as CallableFunction)(data.length);
+                new Uint8Array(wasmMemory.buffer, wasmDataPtr, data.length).set(data);
+                return wasmDataPtr;
             },
-            fsReadSubDirs(pathPtr: number, pathLen: number): number {
-                return 0;
+            fsReadSubDirs(pathOffset: number, pathLen: number): number {
+                if (!wasmMemory || !wasmInstance) {
+                    return 0;
+                }
+                const path = new TextDecoder('utf-8').decode(
+                    new Uint8Array(wasmMemory.buffer, pathOffset, pathLen));
+                const subDirs = fs.readdirSync(path, { withFileTypes: true })
+                    .filter(dirent => dirent.isDirectory())
+                    .map(dirent => dirent.name);
+                const subDirsJson = JSON.stringify(subDirs);
+
+                const data = new TextEncoder().encode(subDirsJson);
+                const wasmDataPtr = (wasmInstance.exports.allocateVec as CallableFunction)(data.length);
+                new Uint8Array(wasmMemory.buffer, wasmDataPtr, data.length).set(data);
+                return wasmDataPtr;
             },
         }
     };
-    const wasmInstance = await WebAssembly.instantiate(wasmBuffer, importOjbect);
+    wasmInstance = (await WebAssembly.instantiate(wasmBuffer, importOjbect)).instance;
+    wasmMemory = wasmInstance.exports.memory as WebAssembly.Memory;
+}
 
-    // JSON.parse(JSON.stringify(params));
+connection.onInitialize(async (params: InitializeParams) => {
+    await initializeWasm();
+    connection.console.log("onInitialize: " + wasmPath);
+    connection.console.log(JSON.stringify(params));
+
+    // TODO: updateConfig
+
+    // const new TextEncoder().encode(JSON.stringify(params));
 
     const result: InitializeResult = {
         capabilities: {}
