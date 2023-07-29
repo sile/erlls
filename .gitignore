@@ -3,3 +3,4 @@ target/
 /vscode/node_modules/
 /vscode/out/*
 !/vscode/out/erlls.wasm
+.log/
