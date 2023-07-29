@@ -1,9 +1,5 @@
-use erlls_core::{
-    config::Config, error::ResponseError, header::Header, message::ResponseMessage,
-    server::LanguageServer,
-};
+use erlls_core::{config::Config, header::Header, server::LanguageServer};
 use orfail::OrFail;
-use serde::Serialize;
 use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -34,34 +30,18 @@ fn main() -> orfail::Result<()> {
             std::str::from_utf8(&content_buf).or_fail()?
         );
 
-        let response = match serde_json::from_slice(&content_buf) {
-            Ok(msg) => server.handle_message(msg),
-            Err(e) => {
-                log::warn!("Invalid message: {e:?}");
-                Some(ResponseMessage::error(ResponseError::from(e)))
-            }
-        };
-        if let Some(response) = response {
-            write_message(&mut stdout, &response, &mut content_buf).or_fail()?;
-        }
-
-        while let Some(notification) = server.take_notification() {
-            write_message(&mut stdout, &notification, &mut content_buf).or_fail()?;
+        server.handle_incoming_message(&content_buf);
+        while let Some(msg) = server.take_outgoing_message() {
+            write_message(&mut stdout, &msg).or_fail()?;
         }
     }
 }
 
-fn write_message<W: Write, T: Serialize>(
-    writer: &mut W,
-    msg: &T,
-    mut buf: &mut Vec<u8>,
-) -> orfail::Result<()> {
-    buf.clear();
-    serde_json::to_writer(&mut buf, msg).or_fail()?;
-    Header::new(buf.len()).to_writer(writer).or_fail()?;
-    writer.write_all(&buf).or_fail()?;
+fn write_message<W: Write>(writer: &mut W, msg: &[u8]) -> orfail::Result<()> {
+    Header::new(msg.len()).to_writer(writer).or_fail()?;
+    writer.write_all(&msg).or_fail()?;
     writer.flush().or_fail()?;
-    log::debug!("Sent JSON: {}", std::str::from_utf8(&buf).or_fail()?);
+    log::debug!("Sent JSON: {}", std::str::from_utf8(&msg).or_fail()?);
     Ok(())
 }
 

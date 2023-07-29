@@ -32,23 +32,40 @@ impl<FS: FileSystem> LanguageServer<FS> {
         }
     }
 
-    // TODO: rename to handle_incoming_message
-    pub fn handle_message(&mut self, msg: Message) -> Option<ResponseMessage> {
+    pub fn config_mut(&mut self) -> &mut Config {
+        &mut self.config
+    }
+
+    pub fn handle_incoming_message(&mut self, json: &[u8]) {
+        let msg = match serde_json::from_slice(json) {
+            Err(e) => {
+                log::warn!("Invalid message: {e}");
+                self.push_outgoing_message(ResponseMessage::error(ResponseError::from(e)));
+                return;
+            }
+            Ok(msg) => msg,
+        };
         match msg {
             Message::Request(msg) => {
                 let res = self.handle_request(msg);
-                Some(res)
+                self.push_outgoing_message(res);
             }
             Message::Notification(msg) => {
                 self.handle_notification(msg);
-                None
             }
         }
     }
 
-    // TODO: take_outgoing_message
-    pub fn take_notification(&mut self) -> Option<serde_json::Value> {
-        self.state.as_mut()?.notifications.pop()
+    pub fn take_outgoing_message(&mut self) -> Option<Vec<u8>> {
+        self.state.as_mut()?.outgoing_messages.pop()
+    }
+
+    fn push_outgoing_message<T: serde::Serialize>(&mut self, msg: T) {
+        if let Some(state) = self.state.as_mut() {
+            state
+                .outgoing_messages
+                .extend(serde_json::to_vec(&msg).ok());
+        }
     }
 
     fn handle_request(&mut self, msg: RequestMessage) -> ResponseMessage {
@@ -120,7 +137,7 @@ impl<FS: FileSystem> LanguageServer<FS> {
             config: self.config.clone(),
             documents: EditingDocuments::default(),
             definition_provider: DefinitionProvider::new(self.config.clone()),
-            notifications: Vec::new(),
+            outgoing_messages: Vec::new(),
             _fs: PhantomData,
         };
 
@@ -153,7 +170,7 @@ struct LanguageServerState<FS> {
     config: Config,
     documents: EditingDocuments,
     definition_provider: DefinitionProvider<FS>,
-    notifications: Vec<serde_json::Value>,
+    outgoing_messages: Vec<Vec<u8>>,
     _fs: PhantomData<FS>,
 }
 
@@ -192,8 +209,8 @@ impl<FS: FileSystem> LanguageServerState<FS> {
                 let notification =
                     NotificationMessage::new("textDocument/publishDiagnostics", params)
                         .or_fail()?;
-                self.notifications
-                    .push(serde_json::to_value(notification).or_fail()?);
+                self.outgoing_messages
+                    .push(serde_json::to_vec(&notification).or_fail()?);
                 return Err(ResponseError::request_failed().message("Failed to format"));
             }
             Ok(new_text) => new_text,
@@ -274,8 +291,8 @@ impl<FS: FileSystem> LanguageServerState<FS> {
             };
             let notification =
                 NotificationMessage::new("textDocument/publishDiagnostics", params).or_fail()?;
-            self.notifications
-                .push(serde_json::to_value(notification).or_fail()?);
+            self.outgoing_messages
+                .push(serde_json::to_vec(&notification).or_fail()?);
         }
 
         log::info!("Before lines: {}", doc.text.lines.len());
