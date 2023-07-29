@@ -14,11 +14,19 @@ export function activate(context: ExtensionContext) {
     const serverModule = context.asAbsolutePath(
         path.join('out', 'server.js')
     );
+    const wasmPath = context.asAbsolutePath(
+        path.join('out', 'erlls.wasm')
+    );
 
     const serverOptions: ServerOptions = {
-        run: { module: serverModule, transport: TransportKind.ipc },
+        run: {
+            module: serverModule,
+            args: [wasmPath],
+            transport: TransportKind.ipc
+        },
         debug: {
             module: serverModule,
+            args: [wasmPath],
             transport: TransportKind.ipc,
         }
     };

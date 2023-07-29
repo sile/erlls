@@ -1,75 +1,57 @@
+import * as fs from "fs";
+
 import {
     createConnection,
-    TextDocuments,
-    Diagnostic,
-    DiagnosticSeverity,
-    ProposedFeatures,
     InitializeParams,
-    DidChangeConfigurationNotification,
-    CompletionItem,
-    CompletionItemKind,
-    TextDocumentPositionParams,
-    TextDocumentSyncKind,
-    InitializeResult
+    InitializeResult,
 } from 'vscode-languageserver/node';
 
 
+const args = process.argv.slice(2);
+const wasmPath = args[0];
+const wasmBuffer = fs.readFileSync(wasmPath);
+
 const connection = createConnection();
 
-let hasConfigurationCapability = false;
-let hasWorkspaceFolderCapability = false;
-let hasDiagnosticRelatedInformationCapability = false;
-
-connection.onInitialize((params: InitializeParams) => {
-    connection.console.log("onInitialize");
+connection.onInitialize(async (params: InitializeParams) => {
+    connection.console.log("onInitialize: " + wasmPath);
     connection.console.log(JSON.stringify(params));
-    // JSON.parse(JSON.stringify(params));
-    const capabilities = params.capabilities;
 
-    // Does the client support the `workspace/configuration` request?
-    // If not, we fall back using global settings.
-    hasConfigurationCapability = !!(
-        capabilities.workspace && !!capabilities.workspace.configuration
-    );
-    hasWorkspaceFolderCapability = !!(
-        capabilities.workspace && !!capabilities.workspace.workspaceFolders
-    );
-    hasDiagnosticRelatedInformationCapability = !!(
-        capabilities.textDocument &&
-        capabilities.textDocument.publishDiagnostics &&
-        capabilities.textDocument.publishDiagnostics.relatedInformation
-    );
-
-    const result: InitializeResult = {
-        capabilities: {
-            textDocumentSync: TextDocumentSyncKind.Incremental,
-            // Tell the client that this server supports code completion.
-            completionProvider: {
-                resolveProvider: true
-            }
+    const importOjbect = {
+        env: {
+            fsExists(pathPtr: number, pathLen: number): boolean {
+                // TODO
+                return false;
+            },
+            fsReadFile(pathPtr: number, pathLen: number): number {
+                return 0;
+            },
+            fsReadSubDirs(pathPtr: number, pathLen: number): number {
+                return 0;
+            },
         }
     };
-    if (hasWorkspaceFolderCapability) {
-        result.capabilities.workspace = {
-            workspaceFolders: {
-                supported: true
-            }
-        };
-    }
+    const wasmInstance = await WebAssembly.instantiate(wasmBuffer, importOjbect);
+
+    // JSON.parse(JSON.stringify(params));
+
+    const result: InitializeResult = {
+        capabilities: {}
+    };
+
+    // };
+    // if (hasWorkspaceFolderCapability) {
+    //     result.capabilities.workspace = {
+    //         workspaceFolders: {
+    //             supported: true
+    //         }
+    //     };
+    // }
     return result;
 });
 
 connection.onInitialized(() => {
     connection.console.log("onInitialized");
-    if (hasConfigurationCapability) {
-        // Register for all configuration changes.
-        connection.client.register(DidChangeConfigurationNotification.type, undefined);
-    }
-    if (hasWorkspaceFolderCapability) {
-        connection.workspace.onDidChangeWorkspaceFolders(_event => {
-            connection.console.log('Workspace folder change event received.');
-        });
-    }
 });
 
 connection.listen();
