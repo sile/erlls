@@ -13,6 +13,7 @@
     "url": "https://github.com/sile/erlls"
   },
   "homepage": "https://github.com/sile/erlls/blob/main/README.md",
+  "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.80.0"
   },
