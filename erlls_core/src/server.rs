@@ -15,15 +15,23 @@ use serde::Deserialize;
 
 #[derive(Debug)]
 pub struct LanguageServer<FS> {
-    state: Option<LanguageServerState<FS>>,
+    initialized: bool,
     config: Config,
+    outgoing_messages: Vec<Vec<u8>>,
+    document_repository: DocumentRepository<FS>,
+    definition_provider: DefinitionProvider,
+    formatting_provider: FormattingProvider,
 }
 
 impl<FS: FileSystem> LanguageServer<FS> {
     pub fn new(config: Config) -> Self {
         Self {
-            state: None,
+            initialized: false,
             config,
+            outgoing_messages: Vec::new(),
+            document_repository: DocumentRepository::new(),
+            definition_provider: DefinitionProvider::default(),
+            formatting_provider: FormattingProvider::default(),
         }
     }
 
@@ -33,9 +41,7 @@ impl<FS: FileSystem> LanguageServer<FS> {
 
     pub fn update_config(&mut self, config: Config) {
         self.config = config.clone();
-        if let Some(state) = &mut self.state {
-            state.document_repository.update_config(config);
-        }
+        self.document_repository.update_config(config);
     }
 
     pub fn handle_incoming_message(&mut self, json: &[u8]) {
@@ -58,15 +64,11 @@ impl<FS: FileSystem> LanguageServer<FS> {
     }
 
     pub fn take_outgoing_message(&mut self) -> Option<Vec<u8>> {
-        self.state.as_mut()?.outgoing_messages.pop()
+        self.outgoing_messages.pop()
     }
 
     fn push_outgoing_message<T: serde::Serialize>(&mut self, msg: T) {
-        if let Some(state) = self.state.as_mut() {
-            state
-                .outgoing_messages
-                .extend(serde_json::to_vec(&msg).ok());
-        }
+        self.outgoing_messages.extend(serde_json::to_vec(&msg).ok());
     }
 
     fn handle_request(&mut self, msg: RequestMessage) -> ResponseMessage {
@@ -79,17 +81,15 @@ impl<FS: FileSystem> LanguageServer<FS> {
 
         let result = if msg.method == "initialize" {
             deserialize_params(msg.params).and_then(|params| self.handle_initialize_request(params))
-        } else if let Some(state) = self.state.as_mut() {
+        } else if self.initialized {
             match msg.method.as_str() {
                 "textDocument/formatting" => deserialize_params(msg.params).and_then(|params| {
-                    state
-                        .formatting_provider
-                        .handle_request(params, &state.document_repository)
+                    self.formatting_provider
+                        .handle_request(params, &self.document_repository)
                 }),
                 "textDocument/definition" => deserialize_params(msg.params).and_then(|params| {
-                    state
-                        .definition_provider
-                        .handle_request(params, &state.document_repository)
+                    self.definition_provider
+                        .handle_request(params, &self.document_repository)
                 }),
                 "shutdown" => Ok(ResponseMessage::default()),
                 _ => {
@@ -106,15 +106,11 @@ impl<FS: FileSystem> LanguageServer<FS> {
     }
 
     fn handle_notification(&mut self, msg: NotificationMessage) {
-        let Some(state) = self.state.as_mut() else {
+        if !self.initialized {
             log::warn!("Dropped a notification as the server is not initialized yet: {msg:?}");
             return;
         };
-        if let Err(e) = state
-            .document_repository
-            .handle_notification(&msg)
-            .or_fail()
-        {
+        if let Err(e) = self.document_repository.handle_notification(&msg).or_fail() {
             log::warn!("Failed to handle {:?} notification: reason={e}", msg.method);
             return;
         }
@@ -126,13 +122,6 @@ impl<FS: FileSystem> LanguageServer<FS> {
     ) -> Result<ResponseMessage, ResponseError> {
         let root_dir = params.root_uri.path().to_path_buf();
         self.config.root_dir = root_dir;
-
-        let state = LanguageServerState {
-            outgoing_messages: Vec::new(),
-            document_repository: DocumentRepository::new(),
-            definition_provider: DefinitionProvider::default(),
-            formatting_provider: FormattingProvider::default(),
-        };
 
         log::info!("Client: {:?}", params.client_info);
         log::info!("Server config: {:?}", self.config.root_dir);
@@ -147,15 +136,7 @@ impl<FS: FileSystem> LanguageServer<FS> {
             .document_changes
             .or_fail()?;
 
-        self.state = Some(state);
+        self.initialized = true;
         Ok(ResponseMessage::result(InitializeResult::new()).or_fail()?)
     }
-}
-
-#[derive(Debug)]
-struct LanguageServerState<FS> {
-    outgoing_messages: Vec<Vec<u8>>,
-    document_repository: DocumentRepository<FS>,
-    definition_provider: DefinitionProvider,
-    formatting_provider: FormattingProvider,
 }
