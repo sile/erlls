@@ -78,14 +78,12 @@ dependencies = [
 
 [[package]]
 name = "erlls"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "env_logger",
  "erlls_core",
  "log",
  "orfail",
- "serde",
- "serde_json",
 ]
 
 [[package]]
