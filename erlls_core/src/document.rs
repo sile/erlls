@@ -1,25 +1,95 @@
-use crate::message::{DocumentUri, Position, Range};
+use crate::{
+    config::Config,
+    fs::FileSystem,
+    message::{
+        DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+        DocumentUri, NotificationMessage, Position, Range,
+    },
+};
 use orfail::OrFail;
 use std::collections::HashMap;
 
-#[derive(Debug, Default, Clone)]
-pub struct EditingDocuments(HashMap<DocumentUri, Document>);
+#[derive(Debug, Default)]
+pub struct DocumentRepository {
+    config: Config,
+    editings: HashMap<DocumentUri, Document>,
+}
 
-impl EditingDocuments {
-    pub fn get(&self, uri: &DocumentUri) -> Option<&Document> {
-        self.0.get(uri)
+impl DocumentRepository {
+    pub fn update_config(&mut self, config: Config) {
+        self.config = config;
     }
 
-    pub fn get_mut(&mut self, uri: &DocumentUri) -> Option<&mut Document> {
-        self.0.get_mut(uri)
+    pub fn get_from_editings(&self, uri: &DocumentUri) -> Option<&Document> {
+        self.editings.get(uri)
     }
 
-    pub fn insert(&mut self, uri: DocumentUri, document: Document) {
-        self.0.insert(uri, document);
+    pub fn get_or_read_text<FS: FileSystem>(&self, uri: &DocumentUri) -> orfail::Result<String> {
+        if let Some(doc) = self.editings.get(uri) {
+            Ok(doc.text.to_string())
+        } else {
+            FS::read_file(&uri.path()).or_fail()
+        }
     }
 
-    pub fn remove(&mut self, uri: &DocumentUri) {
-        self.0.remove(uri);
+    pub fn handle_notification(&mut self, msg: &NotificationMessage) -> orfail::Result<()> {
+        match msg.method.as_str() {
+            "textDocument/didOpen" => {
+                let params = serde_json::from_value(msg.params.clone()).or_fail()?;
+                self.handle_did_open(params).or_fail()?;
+            }
+            "textDocument/didClose" => {
+                let params = serde_json::from_value(msg.params.clone()).or_fail()?;
+                self.handle_did_close(params).or_fail()?;
+            }
+            "textDocument/didChange" => {
+                let params = serde_json::from_value(msg.params.clone()).or_fail()?;
+                self.handle_did_change(params).or_fail()?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_did_open(&mut self, params: DidOpenTextDocumentParams) -> orfail::Result<()> {
+        if !params.text_document.is_erlang() {
+            log::warn!(
+                "Unsupported language: lang={}, uri={}",
+                params.text_document.language_id,
+                params.text_document.uri
+            );
+            return Ok(());
+        }
+
+        self.editings.insert(
+            params.text_document.uri,
+            Document {
+                version: Some(params.text_document.version),
+                text: Text::new(&params.text_document.text),
+            },
+        );
+
+        Ok(())
+    }
+
+    fn handle_did_close(&mut self, params: DidCloseTextDocumentParams) -> orfail::Result<()> {
+        self.editings.remove(&params.text_document.uri);
+        Ok(())
+    }
+
+    fn handle_did_change(&mut self, params: DidChangeTextDocumentParams) -> orfail::Result<()> {
+        let doc = self.editings.get_mut(&params.text_document.uri).or_fail()?;
+        doc.version = Some(params.text_document.version);
+
+        for change in params.content_changes {
+            if let Some(range) = change.range {
+                doc.text.apply_change(range, &change.text).or_fail()?;
+            } else {
+                doc.text = Text::new(&change.text);
+            }
+        }
+
+        Ok(())
     }
 }
 

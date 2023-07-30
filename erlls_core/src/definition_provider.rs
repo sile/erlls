@@ -1,6 +1,6 @@
 use crate::{
     config::Config,
-    document::EditingDocuments,
+    document::DocumentRepository,
     error::ResponseError,
     fs::FileSystem,
     message::{DefinitionParams, DocumentUri, Location, Range, ResponseMessage},
@@ -30,10 +30,10 @@ impl<FS: FileSystem> DefinitionProvider<FS> {
     pub fn handle_request(
         &mut self,
         params: DefinitionParams,
-        editing_documents: &EditingDocuments,
+        documents: &DocumentRepository,
     ) -> Result<ResponseMessage, ResponseError> {
-        let document = editing_documents
-            .get(&params.text_document().uri)
+        let document = documents
+            .get_from_editings(&params.text_document().uri)
             .or_fail()?;
         let position = params.position();
         let efmt_position = document.text.to_efmt_position(position);
@@ -77,18 +77,12 @@ impl<FS: FileSystem> DefinitionProvider<FS> {
             .find_definition(
                 &target,
                 target_uri.clone(),
-                editing_documents,
+                documents,
                 &mut HashSet::new(),
                 true,
             )
             .or_else(|_| {
-                self.find_definition(
-                    &target,
-                    target_uri,
-                    editing_documents,
-                    &mut HashSet::new(),
-                    false,
-                )
+                self.find_definition(&target, target_uri, documents, &mut HashSet::new(), false)
             })
             .or_fail()?;
         log::debug!("location: {location:?}");
@@ -101,15 +95,11 @@ impl<FS: FileSystem> DefinitionProvider<FS> {
         &self,
         target: &Target,
         target_uri: DocumentUri, // TODO: rename
-        editing_documents: &EditingDocuments,
+        documents: &DocumentRepository,
         visited: &mut HashSet<DocumentUri>,
         strict: bool,
     ) -> orfail::Result<Location> {
-        let text = if let Some(doc) = editing_documents.get(&target_uri) {
-            doc.text.to_string()
-        } else {
-            FS::read_file(&target_uri.path()).or_fail()?
-        };
+        let text = documents.get_or_read_text::<FS>(&target_uri).or_fail()?;
         let tree = SyntaxTree::parse_as_much_as_possible(text).or_fail()?;
         if let Some(range) = tree.find_definition(target, strict) {
             Ok(Location::new(
@@ -126,7 +116,7 @@ impl<FS: FileSystem> DefinitionProvider<FS> {
                         continue;
                     }
                     if let Ok(location) =
-                        self.find_definition(target, uri, editing_documents, visited, strict)
+                        self.find_definition(target, uri, documents, visited, strict)
                     {
                         return Ok(location);
                     }

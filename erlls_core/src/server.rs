@@ -1,14 +1,13 @@
 use crate::{
     config::Config,
     definition_provider::DefinitionProvider,
-    document::{Document, EditingDocuments, Text},
+    document::DocumentRepository,
     error::ResponseError,
     fs::FileSystem,
     message::{
-        DefinitionParams, Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams,
-        DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams,
-        InitializeParams, InitializeResult, InitializedParams, Message, NotificationMessage,
-        PublishDiagnosticsParams, Range, RequestMessage, ResponseMessage, TextEdit,
+        DefinitionParams, Diagnostic, DiagnosticSeverity, DocumentFormattingParams,
+        InitializeParams, InitializeResult, Message, NotificationMessage, PublishDiagnosticsParams,
+        Range, RequestMessage, ResponseMessage, TextEdit,
     },
 };
 use orfail::OrFail;
@@ -39,7 +38,8 @@ impl<FS: FileSystem> LanguageServer<FS> {
         self.config = config.clone();
         if let Some(state) = &mut self.state {
             state.config = config.clone();
-            state.definition_provider.update_config(config);
+            state.definition_provider.update_config(config.clone());
+            state.document_repository.update_config(config);
         }
     }
 
@@ -109,26 +109,13 @@ impl<FS: FileSystem> LanguageServer<FS> {
             log::warn!("Dropped a notification as the server is not initialized yet: {msg:?}");
             return;
         };
-        let result = match msg.method.as_str() {
-            "initialized" => serde_json::from_value(msg.params)
-                .or_fail()
-                .and_then(|params| state.handle_initialized_notification(params).or_fail()),
-            "textDocument/didOpen" => serde_json::from_value(msg.params)
-                .or_fail()
-                .and_then(|params| state.handle_did_open_notification(params).or_fail()),
-            "textDocument/didChange" => serde_json::from_value(msg.params)
-                .or_fail()
-                .and_then(|params| state.handle_did_change_notification(params).or_fail()),
-            "textDocument/didClose" => serde_json::from_value(msg.params)
-                .or_fail()
-                .and_then(|params| state.handle_did_close_notification(params).or_fail()),
-            method => {
-                log::warn!("Unknown notification: {method:?}");
-                Ok(())
-            }
-        };
-        if let Err(e) = result {
+        if let Err(e) = state
+            .document_repository
+            .handle_notification(&msg)
+            .or_fail()
+        {
             log::warn!("Failed to handle {:?} notification: reason={e}", msg.method);
+            return;
         }
     }
 
@@ -141,9 +128,9 @@ impl<FS: FileSystem> LanguageServer<FS> {
 
         let state = LanguageServerState {
             config: self.config.clone(),
-            documents: EditingDocuments::default(),
             definition_provider: DefinitionProvider::new(self.config.clone()),
             outgoing_messages: Vec::new(),
+            document_repository: DocumentRepository::default(),
             _fs: PhantomData,
         };
 
@@ -168,9 +155,9 @@ impl<FS: FileSystem> LanguageServer<FS> {
 #[derive(Debug)]
 struct LanguageServerState<FS> {
     config: Config,
-    documents: EditingDocuments,
     definition_provider: DefinitionProvider<FS>,
     outgoing_messages: Vec<Vec<u8>>,
+    document_repository: DocumentRepository,
     _fs: PhantomData<FS>,
 }
 
@@ -184,14 +171,17 @@ impl<FS: FileSystem> LanguageServerState<FS> {
         params: DefinitionParams,
     ) -> Result<ResponseMessage, ResponseError> {
         self.definition_provider
-            .handle_request(params, &self.documents)
+            .handle_request(params, &self.document_repository)
     }
 
     fn handle_formatting_request(
         &mut self,
         params: DocumentFormattingParams,
     ) -> Result<ResponseMessage, ResponseError> {
-        let doc = self.documents.get(&params.text_document.uri).or_fail()?;
+        let doc = self
+            .document_repository
+            .get_from_editings(&params.text_document.uri)
+            .or_fail()?;
         let text = doc.text.to_string();
         let new_text = match efmt_core::format_text::<efmt_core::items::ModuleOrConfig>(&text) {
             Err(e) => {
@@ -225,87 +215,6 @@ impl<FS: FileSystem> LanguageServerState<FS> {
             });
         }
         return Ok(ResponseMessage::result(edits).or_fail()?);
-    }
-
-    fn handle_initialized_notification(
-        &mut self,
-        _params: InitializedParams,
-    ) -> orfail::Result<()> {
-        Ok(())
-    }
-
-    fn handle_did_open_notification(
-        &mut self,
-        params: DidOpenTextDocumentParams,
-    ) -> orfail::Result<()> {
-        log::info!(
-            "didOpen: uri={:?}, lang={}, version={}",
-            params.text_document.uri,
-            params.text_document.language_id,
-            params.text_document.version
-        );
-        if !params.text_document.is_erlang() {
-            log::warn!(
-                "Unsupported language: lang={}, uri={}",
-                params.text_document.language_id,
-                params.text_document.uri
-            );
-            return Ok(());
-        }
-
-        self.documents.insert(
-            params.text_document.uri,
-            Document {
-                version: Some(params.text_document.version),
-                text: Text::new(&params.text_document.text),
-            },
-        );
-        Ok(())
-    }
-
-    fn handle_did_close_notification(
-        &mut self,
-        params: DidCloseTextDocumentParams,
-    ) -> orfail::Result<()> {
-        self.documents.remove(&params.text_document.uri);
-        Ok(())
-    }
-
-    fn handle_did_change_notification(
-        &mut self,
-        params: DidChangeTextDocumentParams,
-    ) -> orfail::Result<()> {
-        log::info!("didChange: uri={:?}", params.text_document.uri);
-        let doc = self
-            .documents
-            .get_mut(&params.text_document.uri)
-            .or_fail()?;
-        doc.version = Some(params.text_document.version);
-
-        {
-            // TODO: Send the notification only if neeeded
-            let params = PublishDiagnosticsParams {
-                uri: params.text_document.uri.clone(),
-                diagnostics: vec![],
-                version: doc.version,
-            };
-            let notification =
-                NotificationMessage::new("textDocument/publishDiagnostics", params).or_fail()?;
-            self.outgoing_messages
-                .push(serde_json::to_vec(&notification).or_fail()?);
-        }
-
-        log::info!("Before lines: {}", doc.text.lines.len());
-        for change in params.content_changes {
-            log::info!("Change: range={:?}", change.range);
-            if let Some(range) = change.range {
-                doc.text.apply_change(range, &change.text).or_fail()?;
-            } else {
-                doc.text = Text::new(&change.text);
-            }
-            log::info!("After lines: {}", doc.text.lines.len());
-        }
-        Ok(())
     }
 }
 
