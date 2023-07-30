@@ -464,10 +464,12 @@ impl FindDefinition for efmt_core::items::forms::FunDecl {
     fn find_definition(&self, ctx: &FindDefinitionContext, target: &Target) -> Option<ItemRange> {
         // TODO: Handle `ItemKind::Variable`
 
-        let Target::Function{
-            function_name, arity, ..
-        } = target else
-        {
+        let Target::Function {
+            function_name,
+            arity,
+            ..
+        } = target
+        else {
             return None;
         };
 
@@ -576,10 +578,7 @@ impl FindTarget for efmt_core::items::forms::ModuleAttr {
 
 impl FindDefinition for efmt_core::items::forms::ModuleAttr {
     fn find_definition(&self, _ctx: &FindDefinitionContext, target: &Target) -> Option<ItemRange> {
-        let Target::Module{
-            module_name, ..
-        } = target
-        else {
+        let Target::Module{ module_name, .. } = target else {
             return None;
         };
         if self.module_name().value() != module_name {
