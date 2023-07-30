@@ -33,6 +33,7 @@ Here are a few examples.
 ### Visual Studio Code
 
 Please install [erlls extension](https://marketplace.visualstudio.com/items?itemName=sile.erlls).
+
 There is no need to install the `erlls` binary using the `$ cargo install` command as the extension already includes the WebAssembly build.
 
 Note that the extension doesn't offer some basic features such as syntax highlighting, 
