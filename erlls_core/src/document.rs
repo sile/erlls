@@ -218,6 +218,7 @@ impl Text {
                 break;
             }
         }
+        offset += position.character;
 
         efmt_core::span::Position::new(offset, position.line + 1, position.character + 1)
     }
