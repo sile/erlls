@@ -312,7 +312,7 @@ impl Text {
 
 impl std::fmt::Display for Text {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for line in &self.lines {
+        for line in self.lines.iter() {
             writeln!(f, "{}", line)?;
         }
         Ok(())
@@ -327,20 +327,20 @@ mod tests {
     #[test]
     fn apply_change_work() -> orfail::Result<()> {
         let mut text = Text::new("abc\ndef\nghi");
-        assert_eq!(text.to_string(), "abc\ndef\nghi");
+        assert_eq!(text.to_string(), "abc\ndef\nghi\n");
 
         text.apply_change(Range::new(Position::new(0, 1), Position::new(0, 2)), "xyz")
             .or_fail()?;
-        assert_eq!(text.to_string(), "axyzc\ndef\nghi");
+        assert_eq!(text.to_string(), "axyzc\ndef\nghi\n");
 
         text.apply_change(Range::new(Position::new(0, 1), Position::new(2, 2)), "123")
             .or_fail()?;
-        assert_eq!(text.to_string(), "a123i");
+        assert_eq!(text.to_string(), "a123i\n");
 
         let mut text = Text::new("111\n222\n333\n444\n555\n666");
         text.apply_change(Range::new(Position::new(1, 1), Position::new(5, 0)), "")
             .or_fail()?;
-        assert_eq!(text.to_string(), "111\n2666");
+        assert_eq!(text.to_string(), "111\n2666\n");
 
         Ok(())
     }

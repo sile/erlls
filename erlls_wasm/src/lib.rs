@@ -44,7 +44,7 @@ impl erlls_core::fs::FileSystem for FileSystem {
             }
             *Box::from_raw(vec_ptr)
         };
-        Ok(String::from_utf8(vec).or_fail()?)
+        String::from_utf8(vec).or_fail()
     }
 
     fn read_sub_dirs<P: AsRef<Path>>(path: P) -> orfail::Result<Vec<PathBuf>> {
@@ -60,7 +60,7 @@ impl erlls_core::fs::FileSystem for FileSystem {
             }
             *Box::from_raw(vec_ptr)
         };
-        Ok(serde_json::from_slice(&vec).or_fail()?)
+        serde_json::from_slice(&vec).or_fail()
     }
 }
 
