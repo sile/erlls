@@ -3,11 +3,11 @@ use crate::{
     definition_provider::DefinitionProvider,
     document::DocumentRepository,
     error::ResponseError,
+    formatting_provider::FormattingProvider,
     fs::FileSystem,
     message::{
-        DefinitionParams, Diagnostic, DiagnosticSeverity, DocumentFormattingParams,
-        InitializeParams, InitializeResult, Message, NotificationMessage, PublishDiagnosticsParams,
-        Range, RequestMessage, ResponseMessage, TextEdit,
+        InitializeParams, InitializeResult, Message, NotificationMessage, RequestMessage,
+        ResponseMessage,
     },
 };
 use orfail::OrFail;
@@ -34,7 +34,6 @@ impl<FS: FileSystem> LanguageServer<FS> {
     pub fn update_config(&mut self, config: Config) {
         self.config = config.clone();
         if let Some(state) = &mut self.state {
-            state.config = config.clone();
             state.document_repository.update_config(config);
         }
     }
@@ -82,11 +81,17 @@ impl<FS: FileSystem> LanguageServer<FS> {
             deserialize_params(msg.params).and_then(|params| self.handle_initialize_request(params))
         } else if let Some(state) = self.state.as_mut() {
             match msg.method.as_str() {
-                "textDocument/formatting" => deserialize_params(msg.params)
-                    .and_then(|params| state.handle_formatting_request(params)),
-                "textDocument/definition" => deserialize_params(msg.params)
-                    .and_then(|params| state.handle_definition_request(params)),
-                "shutdown" => state.handle_shutdown_request(),
+                "textDocument/formatting" => deserialize_params(msg.params).and_then(|params| {
+                    state
+                        .formatting_provider
+                        .handle_request(params, &state.document_repository)
+                }),
+                "textDocument/definition" => deserialize_params(msg.params).and_then(|params| {
+                    state
+                        .definition_provider
+                        .handle_request(params, &state.document_repository)
+                }),
+                "shutdown" => Ok(ResponseMessage::default()),
                 _ => {
                     todo!("handle_request: method={}", msg.method)
                 }
@@ -123,14 +128,14 @@ impl<FS: FileSystem> LanguageServer<FS> {
         self.config.root_dir = root_dir;
 
         let state = LanguageServerState {
-            config: self.config.clone(),
-            definition_provider: DefinitionProvider::new(),
             outgoing_messages: Vec::new(),
             document_repository: DocumentRepository::new(),
+            definition_provider: DefinitionProvider::default(),
+            formatting_provider: FormattingProvider::default(),
         };
 
         log::info!("Client: {:?}", params.client_info);
-        log::info!("Server config: {:?}", state.config.root_dir);
+        log::info!("Server config: {:?}", self.config.root_dir);
         log::info!("Client capabilities: {:?}", params.capabilities);
 
         // Client capabilities check
@@ -149,65 +154,8 @@ impl<FS: FileSystem> LanguageServer<FS> {
 
 #[derive(Debug)]
 struct LanguageServerState<FS> {
-    config: Config,
-    definition_provider: DefinitionProvider,
     outgoing_messages: Vec<Vec<u8>>,
     document_repository: DocumentRepository<FS>,
-}
-
-impl<FS: FileSystem> LanguageServerState<FS> {
-    fn handle_shutdown_request(&mut self) -> Result<ResponseMessage, ResponseError> {
-        Ok(ResponseMessage::default())
-    }
-
-    fn handle_definition_request(
-        &mut self,
-        params: DefinitionParams,
-    ) -> Result<ResponseMessage, ResponseError> {
-        self.definition_provider
-            .handle_request(params, &self.document_repository)
-    }
-
-    fn handle_formatting_request(
-        &mut self,
-        params: DocumentFormattingParams,
-    ) -> Result<ResponseMessage, ResponseError> {
-        let doc = self
-            .document_repository
-            .get_from_editings(&params.text_document.uri)
-            .or_fail()?;
-        let text = doc.text.to_string();
-        let new_text = match efmt_core::format_text::<efmt_core::items::ModuleOrConfig>(&text) {
-            Err(e) => {
-                // TODO: check client capabilities (e.g., "publishDiagnostics":{"relatedInformation":true,"tagSupport":{"valueSet":[1,2]},"versionSupport":true})
-                let diagnostic = Diagnostic {
-                    range: Range::from_parse_error(&e),
-                    message: e.to_string(),
-                    severity: Some(DiagnosticSeverity::ERROR),
-                };
-                let params = PublishDiagnosticsParams {
-                    uri: params.text_document.uri.clone(),
-                    diagnostics: vec![diagnostic],
-                    version: doc.version,
-                };
-                let notification =
-                    NotificationMessage::new("textDocument/publishDiagnostics", params)
-                        .or_fail()?;
-                self.outgoing_messages
-                    .push(serde_json::to_vec(&notification).or_fail()?);
-                return Err(ResponseError::request_failed().message("Failed to format"));
-            }
-            Ok(new_text) => new_text,
-        };
-
-        // TODO: optimzie
-        let mut edits = Vec::new();
-        if text != new_text {
-            edits.push(TextEdit {
-                range: doc.text.range(),
-                new_text,
-            });
-        }
-        return Ok(ResponseMessage::result(edits).or_fail()?);
-    }
+    definition_provider: DefinitionProvider,
+    formatting_provider: FormattingProvider,
 }

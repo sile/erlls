@@ -8,14 +8,10 @@ use crate::{
 use orfail::OrFail;
 use std::collections::HashSet;
 
-#[derive(Debug)]
-pub struct DefinitionProvider {}
+#[derive(Debug, Default)]
+pub struct DefinitionProvider;
 
 impl DefinitionProvider {
-    pub fn new() -> Self {
-        Self {}
-    }
-
     pub fn handle_request<FS: FileSystem>(
         &mut self,
         params: DefinitionParams,
