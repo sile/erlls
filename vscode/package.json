@@ -1,13 +1,23 @@
 {
   "name": "erlls",
   "displayName": "erlls",
+  "publisher": "sile",
+  "license": "MIT",
   "description": "Language Server for Erlang",
   "version": "0.0.1",
+  "bugs": {
+    "url": "https://github.com/sile/erlls"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sile/erlls"
+  },
+  "homepage": "https://github.com/sile/erlls/blob/main/README.md",
   "engines": {
     "vscode": "^1.80.0"
   },
   "categories": [
-    "Other"
+    "Programming Languages"
   ],
   "activationEvents": [
     "onLanguage:erlang"
