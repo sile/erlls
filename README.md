@@ -21,7 +21,41 @@ Supported LSP features
   - [ ] Variable
   - [x] Include file
 - [x] [textDocument/formatting](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_formatting)
-  - [x] Formatting by using [efmt](https://bithub.com/sile/efmt)
+  - [x] Formatting documents by using [efmt](https://bithub.com/sile/efmt)
 - [ ] [textDocument/publishDiagnostics](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_publishDiagnostics)
 
+Editor integrations
+-------------------
 
+ErlLS can be used with any [LSP](https://microsoft.github.io/language-server-protocol/) clients. 
+Here are a few examples.
+
+### Visual Studio Code
+
+Please install [erlls extension](https://marketplace.visualstudio.com/items?itemName=sile.erlls).
+There is no need to install the `erlls` binary using the `$ cargo install` command as the extension already includes the WebAssembly build.
+
+Note that the extension doesn't offer some basic features such as syntax highlighting, 
+so it's recommended to use it in conjunction with other Erlang extensions.
+
+### Emacs ([lsp-mode](https://github.com/emacs-lsp/lsp-mode))
+
+1. Install `erlls` command.
+
+```console
+$ cargo install erlls
+```
+
+2. Add the following code to your `.emacs` file.
+
+```emacs
+(with-eval-after-load 'lsp-mode
+  (add-to-list 'lsp-language-id-configuration
+               '(erlang-mode . "erlang")))
+
+(lsp-register-client
+ (make-lsp-client :new-connection (lsp-stdio-connection "erlls")
+                  :activation-fn (lsp-activate-on "erlang")
+                  :priority -1
+                  :server-id 'erlls))
+```
