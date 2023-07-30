@@ -12,13 +12,11 @@ use crate::{
 };
 use orfail::OrFail;
 use serde::Deserialize;
-use std::marker::PhantomData;
 
 #[derive(Debug)]
 pub struct LanguageServer<FS> {
     state: Option<LanguageServerState<FS>>,
     config: Config,
-    _fs: PhantomData<FS>,
 }
 
 impl<FS: FileSystem> LanguageServer<FS> {
@@ -26,7 +24,6 @@ impl<FS: FileSystem> LanguageServer<FS> {
         Self {
             state: None,
             config,
-            _fs: PhantomData,
         }
     }
 
@@ -38,7 +35,6 @@ impl<FS: FileSystem> LanguageServer<FS> {
         self.config = config.clone();
         if let Some(state) = &mut self.state {
             state.config = config.clone();
-            state.definition_provider.update_config(config.clone());
             state.document_repository.update_config(config);
         }
     }
@@ -128,10 +124,9 @@ impl<FS: FileSystem> LanguageServer<FS> {
 
         let state = LanguageServerState {
             config: self.config.clone(),
-            definition_provider: DefinitionProvider::new(self.config.clone()),
+            definition_provider: DefinitionProvider::new(),
             outgoing_messages: Vec::new(),
-            document_repository: DocumentRepository::default(),
-            _fs: PhantomData,
+            document_repository: DocumentRepository::new(),
         };
 
         log::info!("Client: {:?}", params.client_info);
@@ -155,10 +150,9 @@ impl<FS: FileSystem> LanguageServer<FS> {
 #[derive(Debug)]
 struct LanguageServerState<FS> {
     config: Config,
-    definition_provider: DefinitionProvider<FS>,
+    definition_provider: DefinitionProvider,
     outgoing_messages: Vec<Vec<u8>>,
-    document_repository: DocumentRepository,
-    _fs: PhantomData<FS>,
+    document_repository: DocumentRepository<FS>,
 }
 
 impl<FS: FileSystem> LanguageServerState<FS> {
@@ -215,32 +209,5 @@ impl<FS: FileSystem> LanguageServerState<FS> {
             });
         }
         return Ok(ResponseMessage::result(edits).or_fail()?);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::message::{Position, Range};
-
-    #[test]
-    fn apply_change_work() -> orfail::Result<()> {
-        let mut text = Text::new("abc\ndef\nghi");
-        assert_eq!(text.to_string(), "abc\ndef\nghi");
-
-        text.apply_change(Range::new(Position::new(0, 1), Position::new(0, 2)), "xyz")
-            .or_fail()?;
-        assert_eq!(text.to_string(), "axyzc\ndef\nghi");
-
-        text.apply_change(Range::new(Position::new(0, 1), Position::new(2, 2)), "123")
-            .or_fail()?;
-        assert_eq!(text.to_string(), "a123i");
-
-        let mut text = Text::new("111\n222\n333\n444\n555\n666");
-        text.apply_change(Range::new(Position::new(1, 1), Position::new(5, 0)), "")
-            .or_fail()?;
-        assert_eq!(text.to_string(), "111\n2666");
-
-        Ok(())
     }
 }

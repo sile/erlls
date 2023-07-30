@@ -1,5 +1,4 @@
 use crate::{
-    config::Config,
     document::DocumentRepository,
     error::ResponseError,
     fs::FileSystem,
@@ -7,30 +6,20 @@ use crate::{
     syntax_tree::{SyntaxTree, Target},
 };
 use orfail::OrFail;
-use std::{collections::HashSet, marker::PhantomData};
+use std::collections::HashSet;
 
 #[derive(Debug)]
-pub struct DefinitionProvider<FS> {
-    config: Config,
-    _fs: PhantomData<FS>,
-}
+pub struct DefinitionProvider {}
 
-impl<FS: FileSystem> DefinitionProvider<FS> {
-    pub fn new(config: Config) -> Self {
-        Self {
-            config,
-            _fs: PhantomData,
-        }
+impl DefinitionProvider {
+    pub fn new() -> Self {
+        Self {}
     }
 
-    pub fn update_config(&mut self, config: Config) {
-        self.config = config;
-    }
-
-    pub fn handle_request(
+    pub fn handle_request<FS: FileSystem>(
         &mut self,
         params: DefinitionParams,
-        documents: &DocumentRepository,
+        documents: &DocumentRepository<FS>,
     ) -> Result<ResponseMessage, ResponseError> {
         let document = documents
             .get_from_editings(&params.text_document().uri)
@@ -59,11 +48,11 @@ impl<FS: FileSystem> DefinitionProvider<FS> {
                 module_name: Some(module_name),
                 ..
             } => {
-                target_uri = self.resolve_module_uri(module_name).or_fail()?;
+                target_uri = documents.resolve_module_uri(module_name).or_fail()?;
             }
             Target::Include { include, .. } => {
-                return include
-                    .resolve_document_uri::<FS>(&target_uri, &self.config)
+                return documents
+                    .resolve_include_uri(&target_uri, include)
                     .map(|uri| Location::new(uri, Range::beginning()))
                     .and_then(|location| ResponseMessage::result(location).ok())
                     .ok_or_else(|| {
@@ -91,15 +80,15 @@ impl<FS: FileSystem> DefinitionProvider<FS> {
         Ok(response)
     }
 
-    fn find_definition(
+    fn find_definition<FS: FileSystem>(
         &self,
         target: &Target,
         target_uri: DocumentUri, // TODO: rename
-        documents: &DocumentRepository,
+        documents: &DocumentRepository<FS>,
         visited: &mut HashSet<DocumentUri>,
         strict: bool,
     ) -> orfail::Result<Location> {
-        let text = documents.get_or_read_text::<FS>(&target_uri).or_fail()?;
+        let text = documents.get_or_read_text(&target_uri).or_fail()?;
         let tree = SyntaxTree::parse_as_much_as_possible(text).or_fail()?;
         if let Some(range) = tree.find_definition(target, strict) {
             Ok(Location::new(
@@ -111,7 +100,7 @@ impl<FS: FileSystem> DefinitionProvider<FS> {
 
             for include in tree.collect_includes() {
                 log::debug!("include: {include:?}");
-                if let Some(uri) = include.resolve_document_uri::<FS>(&target_uri, &self.config) {
+                if let Some(uri) = documents.resolve_include_uri(&target_uri, &include) {
                     if visited.contains(&uri) {
                         continue;
                     }
@@ -125,28 +114,5 @@ impl<FS: FileSystem> DefinitionProvider<FS> {
 
             Err(orfail::Failure::new().message("No definitions found"))
         }
-    }
-
-    fn resolve_module_uri(&self, module: &str) -> orfail::Result<DocumentUri> {
-        let path = self.config.root_dir.join(format!("src/{}.erl", module));
-        if FS::exists(&path) {
-            return DocumentUri::from_path(&self.config.root_dir, path).or_fail();
-        }
-
-        let path = self.config.root_dir.join(format!("test/{}.erl", module));
-        if FS::exists(&path) {
-            return DocumentUri::from_path(&self.config.root_dir, path).or_fail();
-        }
-
-        for lib_dir in &self.config.erl_libs {
-            for app_dir in FS::read_sub_dirs(lib_dir).ok().into_iter().flatten() {
-                let path = app_dir.join(format!("src/{}.erl", module));
-                if FS::exists(&path) {
-                    return DocumentUri::from_path(&self.config.root_dir, path).or_fail();
-                }
-            }
-        }
-
-        Err(orfail::Failure::new().message(format!("Module not found: {module:?}")))
     }
 }

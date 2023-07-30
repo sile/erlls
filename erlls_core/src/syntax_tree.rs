@@ -1,11 +1,7 @@
-use crate::{config::Config, fs::FileSystem, message::DocumentUri};
 use efmt_core::{items::Macro, parse::TokenStream, span::Position, span::Span};
 use erl_tokenize::{values::Symbol, Tokenizer};
 use orfail::OrFail;
-use std::{
-    path::{Component, PathBuf},
-    sync::Arc,
-};
+use std::{path::PathBuf, sync::Arc};
 
 pub type ItemRange = std::ops::Range<Position>;
 
@@ -1019,7 +1015,7 @@ impl FindTarget for efmt_core::items::expressions::LiteralExpr {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Target {
     Module {
         position: Position,
@@ -1073,7 +1069,7 @@ impl Target {
             Target::Record { record_name, .. } => record_name,
             Target::RecordField { field_name, .. } => field_name,
             Target::Variable { variable_name, .. } => variable_name,
-            Target::Include { include, .. } => unreachable!(),
+            Target::Include { .. } => unreachable!(),
         }
     }
 
@@ -1091,57 +1087,10 @@ impl Target {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Include {
     pub is_lib: bool,
     pub path: PathBuf,
-}
-
-impl Include {
-    pub fn resolve_document_uri<FS: FileSystem>(
-        &self,
-        current_uri: &DocumentUri,
-        config: &Config,
-    ) -> Option<DocumentUri> {
-        let current = current_uri.path().to_path_buf();
-        if self.is_lib {
-            let mut include_path_components = self.path.components();
-            let target_app_name = include_path_components.next().and_then(|x| {
-                if let Component::Normal(x) = x {
-                    x.to_str()
-                } else {
-                    None
-                }
-            })?;
-            for lib_dir in &config.erl_libs {
-                for app_dir in FS::read_sub_dirs(&lib_dir).ok().into_iter().flatten() {
-                    let app_name = app_dir
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .and_then(|namd_and_version| namd_and_version.splitn(2, '-').next());
-                    if app_name != Some(target_app_name) {
-                        continue;
-                    }
-
-                    let path = app_dir.join(include_path_components.as_path());
-                    if FS::exists(&path) {
-                        return DocumentUri::from_path(&config.root_dir, path).ok();
-                    }
-                }
-            }
-        } else {
-            let path = current.parent()?.join(&self.path);
-            if FS::exists(&path) {
-                return DocumentUri::from_path(&config.root_dir, path).ok();
-            }
-
-            let path = current.parent()?.parent()?.join("include").join(&self.path);
-            if FS::exists(&path) {
-                return DocumentUri::from_path(&config.root_dir, path).ok();
-            }
-        }
-        None
-    }
 }
 
 #[cfg(test)]
@@ -1194,49 +1143,49 @@ bar() ->
         for i in 0..text.len() {
             use Target::*;
 
-            assert_rename_target!(8, 10, "foo", Module { .. }, i, tree);
-            assert_rename_target!(21, 23, "foo", Type { .. }, i, tree);
-            assert_rename_target!(30, 32, "any", Type { .. }, i, tree);
-            assert_rename_target!(43, 45, "bar", Type { .. }, i, tree);
-            assert_rename_target!(47, 47, "A", Variable { .. }, i, tree);
-            assert_rename_target!(54, 54, "A", Variable { .. }, i, tree);
-            assert_rename_target!(58, 58, "b", Module { .. }, i, tree);
-            assert_rename_target!(60, 60, "b", Type { .. }, i, tree);
-            assert_rename_target!(77, 79, "foo", Function { .. }, i, tree);
-            assert_rename_target!(81, 83, "foo", Module { .. }, i, tree);
-            assert_rename_target!(85, 87, "foo", Type { .. }, i, tree);
-            assert_rename_target!(99, 101, "foo", Function { .. }, i, tree);
-            assert_rename_target!(103, 103, "A", Variable { .. }, i, tree);
-            assert_rename_target!(113, 113, "B", Variable { .. }, i, tree);
-            assert_rename_target!(117, 117, "A", Variable { .. }, i, tree);
-            assert_rename_target!(128, 129, "io", Module { .. }, i, tree);
-            assert_rename_target!(131, 136, "format", Function { .. }, i, tree);
-            assert_rename_target!(149, 149, "B", Variable { .. }, i, tree);
-            assert_rename_target!(173, 178, "Record", Variable { .. }, i, tree);
-            assert_rename_target!(180, 190, "record_name", Record { .. }, i, tree);
-            assert_rename_target!(192, 201, "field_name", RecordField { .. }, i, tree);
-            assert_rename_target!(210, 212, "rec", Record { .. }, i, tree);
-            assert_rename_target!(214, 216, "aaa", RecordField { .. }, i, tree);
-            assert_rename_target!(235, 237, "ccc", RecordField { .. }, i, tree);
-            assert_rename_target!(246, 246, "A", Variable { .. }, i, tree);
-            assert_rename_target!(253, 253, "A", Variable { .. }, i, tree);
-            assert_rename_target!(265, 265, "M", Variable { .. }, i, tree);
-            assert_rename_target!(288, 288, "C", Variable { .. }, i, tree);
-            assert_rename_target!(327, 329, "XXX", Variable { .. }, i, tree);
-            assert_rename_target!(334, 336, "baz", Function { .. }, i, tree);
-            assert_rename_target!(338, 340, "XXX", Variable { .. }, i, tree);
-            assert_rename_target!(370, 372, "foo", Function { .. }, i, tree);
-            assert_rename_target!(393, 395, "foo", Type { .. }, i, tree);
-            assert_rename_target!(411, 413, "rec", Record { .. }, i, tree);
-            assert_rename_target!(418, 420, "aaa", RecordField { .. }, i, tree);
-            assert_rename_target!(424, 426, "bbb", Function { .. }, i, tree);
-            assert_rename_target!(433, 435, "foo", Type { .. }, i, tree);
-            assert_rename_target!(452, 454, "FOO", Macro { .. }, i, tree);
-            assert_rename_target!(474, 476, "BAR", Macro { .. }, i, tree);
-            assert_rename_target!(489, 491, "bar", Function { .. }, i, tree);
-            assert_rename_target!(503, 505, "FOO", Macro { .. }, i, tree);
-            assert_rename_target!(510, 512, "BAR", Macro { .. }, i, tree);
-            assert_rename_target!(514, 516, "bbb", Function { .. }, i, tree);
+            assert_rename_target!(8, 11, "foo", Module { .. }, i, tree);
+            assert_rename_target!(21, 24, "foo", Type { .. }, i, tree);
+            assert_rename_target!(30, 33, "any", Type { .. }, i, tree);
+            assert_rename_target!(43, 46, "bar", Type { .. }, i, tree);
+            assert_rename_target!(47, 48, "A", Variable { .. }, i, tree);
+            assert_rename_target!(54, 55, "A", Variable { .. }, i, tree);
+            assert_rename_target!(58, 59, "b", Module { .. }, i, tree);
+            assert_rename_target!(60, 61, "b", Type { .. }, i, tree);
+            assert_rename_target!(77, 80, "foo", Function { .. }, i, tree);
+            assert_rename_target!(81, 84, "foo", Module { .. }, i, tree);
+            assert_rename_target!(85, 88, "foo", Type { .. }, i, tree);
+            assert_rename_target!(99, 102, "foo", Function { .. }, i, tree);
+            assert_rename_target!(103, 104, "A", Variable { .. }, i, tree);
+            assert_rename_target!(113, 114, "B", Variable { .. }, i, tree);
+            assert_rename_target!(117, 118, "A", Variable { .. }, i, tree);
+            assert_rename_target!(128, 130, "io", Module { .. }, i, tree);
+            assert_rename_target!(131, 137, "format", Function { .. }, i, tree);
+            assert_rename_target!(149, 150, "B", Variable { .. }, i, tree);
+            assert_rename_target!(173, 179, "Record", Variable { .. }, i, tree);
+            assert_rename_target!(180, 191, "record_name", Record { .. }, i, tree);
+            assert_rename_target!(192, 202, "field_name", RecordField { .. }, i, tree);
+            assert_rename_target!(210, 213, "rec", Record { .. }, i, tree);
+            assert_rename_target!(214, 217, "aaa", RecordField { .. }, i, tree);
+            assert_rename_target!(235, 238, "ccc", RecordField { .. }, i, tree);
+            assert_rename_target!(246, 247, "A", Variable { .. }, i, tree);
+            assert_rename_target!(253, 254, "A", Variable { .. }, i, tree);
+            assert_rename_target!(265, 266, "M", Variable { .. }, i, tree);
+            assert_rename_target!(288, 289, "C", Variable { .. }, i, tree);
+            assert_rename_target!(327, 330, "XXX", Variable { .. }, i, tree);
+            assert_rename_target!(334, 337, "baz", Function { .. }, i, tree);
+            assert_rename_target!(338, 341, "XXX", Variable { .. }, i, tree);
+            assert_rename_target!(370, 373, "foo", Function { .. }, i, tree);
+            assert_rename_target!(393, 396, "foo", Type { .. }, i, tree);
+            assert_rename_target!(411, 414, "rec", Record { .. }, i, tree);
+            assert_rename_target!(418, 421, "aaa", RecordField { .. }, i, tree);
+            assert_rename_target!(424, 427, "bbb", Function { .. }, i, tree);
+            assert_rename_target!(433, 436, "foo", Type { .. }, i, tree);
+            assert_rename_target!(452, 455, "FOO", Macro { .. }, i, tree);
+            assert_rename_target!(474, 477, "BAR", Macro { .. }, i, tree);
+            assert_rename_target!(489, 492, "bar", Function { .. }, i, tree);
+            assert_rename_target!(503, 506, "FOO", Macro { .. }, i, tree);
+            assert_rename_target!(510, 513, "BAR", Macro { .. }, i, tree);
+            assert_rename_target!(514, 517, "bbb", Function { .. }, i, tree);
 
             assert_eq!(None, tree.find_target(offset(i)));
         }

@@ -5,17 +5,27 @@ use crate::{
         DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
         DocumentUri, NotificationMessage, Position, Range,
     },
+    syntax_tree::Include,
 };
 use orfail::OrFail;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Component};
 
-#[derive(Debug, Default)]
-pub struct DocumentRepository {
+#[derive(Debug)]
+pub struct DocumentRepository<FS> {
     config: Config,
     editings: HashMap<DocumentUri, Document>,
+    _fs: std::marker::PhantomData<FS>,
 }
 
-impl DocumentRepository {
+impl<FS: FileSystem> DocumentRepository<FS> {
+    pub fn new() -> Self {
+        Self {
+            config: Config::default(),
+            editings: HashMap::new(),
+            _fs: std::marker::PhantomData,
+        }
+    }
+
     pub fn update_config(&mut self, config: Config) {
         self.config = config;
     }
@@ -24,12 +34,90 @@ impl DocumentRepository {
         self.editings.get(uri)
     }
 
-    pub fn get_or_read_text<FS: FileSystem>(&self, uri: &DocumentUri) -> orfail::Result<String> {
+    pub fn get_or_read_text(&self, uri: &DocumentUri) -> orfail::Result<String> {
         if let Some(doc) = self.editings.get(uri) {
             Ok(doc.text.to_string())
         } else {
             FS::read_file(&uri.path()).or_fail()
         }
+    }
+
+    pub fn resolve_include_uri(
+        &self,
+        current_uri: &DocumentUri,
+        include: &Include,
+    ) -> Option<DocumentUri> {
+        let current = current_uri.path().to_path_buf();
+        if include.is_lib {
+            let mut include_path_components = include.path.components();
+            let target_app_name = include_path_components.next().and_then(|x| {
+                if let Component::Normal(x) = x {
+                    x.to_str()
+                } else {
+                    None
+                }
+            })?;
+            for lib_dir in &self.config.erl_libs {
+                for app_dir in FS::read_sub_dirs(&lib_dir).ok().into_iter().flatten() {
+                    let app_name = app_dir
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .and_then(|namd_and_version| namd_and_version.splitn(2, '-').next());
+                    if app_name != Some(target_app_name) {
+                        continue;
+                    }
+
+                    let path = app_dir.join(include_path_components.as_path());
+                    if FS::exists(&path) {
+                        return DocumentUri::from_path(&self.config.root_dir, path).ok();
+                    }
+                }
+            }
+        } else {
+            let path = current.parent()?.join(&include.path);
+            if FS::exists(&path) {
+                return DocumentUri::from_path(&self.config.root_dir, path).ok();
+            }
+
+            let path = current
+                .parent()?
+                .parent()?
+                .join("include")
+                .join(&include.path);
+            if FS::exists(&path) {
+                return DocumentUri::from_path(&self.config.root_dir, path).ok();
+            }
+        }
+        None
+    }
+
+    pub fn resolve_module_uri(&self, module_name: &str) -> orfail::Result<DocumentUri> {
+        let path = self
+            .config
+            .root_dir
+            .join(format!("src/{}.erl", module_name));
+        if FS::exists(&path) {
+            return DocumentUri::from_path(&self.config.root_dir, path).or_fail();
+        }
+
+        let path = self
+            .config
+            .root_dir
+            .join(format!("test/{}.erl", module_name));
+        if FS::exists(&path) {
+            return DocumentUri::from_path(&self.config.root_dir, path).or_fail();
+        }
+
+        for lib_dir in &self.config.erl_libs {
+            for app_dir in FS::read_sub_dirs(lib_dir).ok().into_iter().flatten() {
+                let path = app_dir.join(format!("src/{}.erl", module_name));
+                if FS::exists(&path) {
+                    return DocumentUri::from_path(&self.config.root_dir, path).or_fail();
+                }
+            }
+        }
+
+        Err(orfail::Failure::new().message(format!("Module not found: {module_name:?}")))
     }
 
     pub fn handle_notification(&mut self, msg: &NotificationMessage) -> orfail::Result<()> {
@@ -220,5 +308,32 @@ impl Text {
 
     pub fn range(&self) -> Range {
         Range::new(Position::new(0, 0), Position::new(self.lines.len(), 0))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::message::{Position, Range};
+
+    #[test]
+    fn apply_change_work() -> orfail::Result<()> {
+        let mut text = Text::new("abc\ndef\nghi");
+        assert_eq!(text.to_string(), "abc\ndef\nghi");
+
+        text.apply_change(Range::new(Position::new(0, 1), Position::new(0, 2)), "xyz")
+            .or_fail()?;
+        assert_eq!(text.to_string(), "axyzc\ndef\nghi");
+
+        text.apply_change(Range::new(Position::new(0, 1), Position::new(2, 2)), "123")
+            .or_fail()?;
+        assert_eq!(text.to_string(), "a123i");
+
+        let mut text = Text::new("111\n222\n333\n444\n555\n666");
+        text.apply_change(Range::new(Position::new(1, 1), Position::new(5, 0)), "")
+            .or_fail()?;
+        assert_eq!(text.to_string(), "111\n2666");
+
+        Ok(())
     }
 }
