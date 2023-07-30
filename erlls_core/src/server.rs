@@ -32,8 +32,16 @@ impl<FS: FileSystem> LanguageServer<FS> {
         }
     }
 
-    pub fn config_mut(&mut self) -> &mut Config {
-        &mut self.config
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
+    pub fn update_config(&mut self, config: Config) {
+        self.config = config.clone();
+        if let Some(state) = &mut self.state {
+            state.config = config.clone();
+            state.definition_provider.update_config(config);
+        }
     }
 
     pub fn handle_incoming_message(&mut self, json: &[u8]) {

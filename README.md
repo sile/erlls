@@ -9,7 +9,6 @@ Features List
 - General features:
   - [x] Error tolerant parser
   - [x] `-include()`
-  - [x] `ERL_LIBS`
 - LSP features:
   - [ ] textDocument/definition
     - [x] Module

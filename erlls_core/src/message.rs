@@ -107,9 +107,16 @@ pub enum RequestId {
 pub struct DocumentUri(url::Url);
 
 impl DocumentUri {
-    pub fn from_path<P: AsRef<Path>>(path: P) -> orfail::Result<Self> {
-        let url =
-            url::Url::parse(&format!("file://{}", path.as_ref().to_str().or_fail()?)).or_fail()?;
+    pub fn from_path<P0: AsRef<Path>, P1: AsRef<Path>>(root: P0, path: P1) -> orfail::Result<Self> {
+        let url = if path.as_ref().is_absolute() {
+            url::Url::parse(&format!("file://{}", path.as_ref().to_str().or_fail()?)).or_fail()?
+        } else {
+            url::Url::parse(&format!(
+                "file://{}",
+                root.as_ref().join(path).to_str().or_fail()?
+            ))
+            .or_fail()?
+        };
         Ok(Self(url))
     }
 

@@ -9,8 +9,23 @@ fn main() -> orfail::Result<()> {
     env_logger::init();
 
     let mut config = Config::default();
-    if let Ok(erl_libs) = std::env::var("ERL_LIBS") {
-        config.erl_libs = erl_libs.split(&[':', ';'][..]).map(PathBuf::from).collect();
+    if let Some(kernel_lib_dir) = std::process::Command::new("erl")
+        .arg("-boot")
+        .arg("start_clean")
+        .arg("-noshell")
+        .arg("-eval")
+        .arg("io:format(code:lib_dir(kernel)).")
+        .arg("-s")
+        .arg("init")
+        .arg("stop")
+        .output()
+        .ok()
+        .and_then(|output| String::from_utf8(output.stdout).ok().map(PathBuf::from))
+    {
+        config
+            .erl_libs
+            .extend(kernel_lib_dir.parent().into_iter().map(|p| p.to_owned()));
+        config.erl_libs.push(PathBuf::from("_build/default/lib"));
     }
 
     let mut server = LanguageServer::<FileSystem>::new(config);

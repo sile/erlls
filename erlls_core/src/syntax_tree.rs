@@ -1118,19 +1118,19 @@ impl Include {
 
                     let path = app_dir.join(include_path_components.as_path());
                     if FS::exists(&path) {
-                        return DocumentUri::from_path(path).ok();
+                        return DocumentUri::from_path(&config.root_dir, path).ok();
                     }
                 }
             }
         } else {
             let path = current.parent()?.join(&self.path);
             if FS::exists(&path) {
-                return DocumentUri::from_path(path).ok();
+                return DocumentUri::from_path(&config.root_dir, path).ok();
             }
 
             let path = current.parent()?.parent()?.join("include").join(&self.path);
             if FS::exists(&path) {
-                return DocumentUri::from_path(path).ok();
+                return DocumentUri::from_path(&config.root_dir, path).ok();
             }
         }
         None

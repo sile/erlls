@@ -1,4 +1,6 @@
 import * as fs from "fs";
+import * as child_process from "child_process";
+import * as path from "path";
 
 import {
     createConnection,
@@ -51,11 +53,11 @@ async function initializeWasm() {
                 if (!wasmMemory || !wasmInstance) {
                     return 0;
                 }
-                const path = new TextDecoder('utf-8').decode(
+                const parentDir = new TextDecoder('utf-8').decode(
                     new Uint8Array(wasmMemory.buffer, pathOffset, pathLen));
-                const subDirs = fs.readdirSync(path, { withFileTypes: true })
+                const subDirs = fs.readdirSync(parentDir, { withFileTypes: true })
                     .filter(dirent => dirent.isDirectory())
-                    .map(dirent => dirent.name);
+                    .map(dirent => path.join(parentDir, dirent.name));
                 const subDirsJson = JSON.stringify(subDirs);
 
                 const data = new TextEncoder().encode(subDirsJson);
@@ -71,7 +73,27 @@ async function initializeWasm() {
 
     serverPtr = (wasmInstance.exports.newServer as CallableFunction)();
 
-    // TODO: updateConfig
+    child_process.exec("erl -boot start_clean -noshell -eval 'io:format(code:lib_dir(kernel)).' -s init stop", (_error, stdout, _stderr) => {
+        if (wasmInstance === undefined || wasmMemory === undefined) {
+            return;
+        }
+        if (!stdout) {
+            return;
+        }
+        const libDir = path.dirname(stdout);
+        if (!libDir) {
+            return;
+        }
+
+        const config = { "erlLibs": [libDir, "_build/default/lib"] };
+        const configJsonBytes = new TextEncoder().encode(JSON.stringify(config));
+        const wasmConfigPtr =
+            (wasmInstance.exports.allocateVec as CallableFunction)(configJsonBytes.length);
+        const wasmConfigOffset =
+            (wasmInstance.exports.vecOffset as CallableFunction)(wasmConfigPtr);
+        new Uint8Array(wasmMemory.buffer, wasmConfigOffset, configJsonBytes.length).set(configJsonBytes);
+        (wasmInstance.exports.updateConfig as CallableFunction)(serverPtr, wasmConfigPtr);
+    });
 }
 
 async function handleIncomingMessage(

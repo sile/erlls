@@ -100,14 +100,16 @@ pub fn newServer() -> *mut LanguageServer<FileSystem> {
 #[no_mangle]
 pub fn updateConfig(server: *mut LanguageServer<FileSystem>, config_json_ptr: *mut Vec<u8>) {
     unsafe {
-        let config_json = *Box::from_raw(config_json_ptr);
-        let Ok(config) = serde_json::from_slice::<ConfigDelta>(&config_json) else {
+        let config_delta_json = *Box::from_raw(config_json_ptr);
+        let Ok(config_delta) = serde_json::from_slice::<ConfigDelta>(&config_delta_json) else {
             return;
         };
         let server = &mut *server;
-        if let Some(v) = config.erl_libs {
-            server.config_mut().erl_libs = v;
+        let mut config = server.config().clone();
+        if let Some(v) = config_delta.erl_libs {
+            config.erl_libs = v;
         }
+        server.update_config(config);
     }
 }
 

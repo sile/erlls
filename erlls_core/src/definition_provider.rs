@@ -23,6 +23,10 @@ impl<FS: FileSystem> DefinitionProvider<FS> {
         }
     }
 
+    pub fn update_config(&mut self, config: Config) {
+        self.config = config;
+    }
+
     pub fn handle_request(
         &mut self,
         params: DefinitionParams,
@@ -133,19 +137,19 @@ impl<FS: FileSystem> DefinitionProvider<FS> {
     fn resolve_module_uri(&self, module: &str) -> orfail::Result<DocumentUri> {
         let path = self.config.root_dir.join(format!("src/{}.erl", module));
         if FS::exists(&path) {
-            return DocumentUri::from_path(path).or_fail();
+            return DocumentUri::from_path(&self.config.root_dir, path).or_fail();
         }
 
         let path = self.config.root_dir.join(format!("test/{}.erl", module));
         if FS::exists(&path) {
-            return DocumentUri::from_path(path).or_fail();
+            return DocumentUri::from_path(&self.config.root_dir, path).or_fail();
         }
 
         for lib_dir in &self.config.erl_libs {
             for app_dir in FS::read_sub_dirs(lib_dir).ok().into_iter().flatten() {
                 let path = app_dir.join(format!("src/{}.erl", module));
                 if FS::exists(&path) {
-                    return DocumentUri::from_path(path).or_fail();
+                    return DocumentUri::from_path(&self.config.root_dir, path).or_fail();
                 }
             }
         }
