@@ -8,8 +8,7 @@ use crate::{
         DefinitionParams, Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams,
         DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams,
         InitializeParams, InitializeResult, InitializedParams, Message, NotificationMessage,
-        PositionEncodingKind, PublishDiagnosticsParams, Range, RequestMessage, ResponseMessage,
-        TextEdit,
+        PublishDiagnosticsParams, Range, RequestMessage, ResponseMessage, TextEdit,
     },
 };
 use orfail::OrFail;
@@ -160,14 +159,6 @@ impl<FS: FileSystem> LanguageServer<FS> {
             .workspace_edit
             .document_changes
             .or_fail()?;
-
-        // TODO: support utf-16 for vscode
-        // params
-        //     .capabilities
-        //     .general
-        //     .position_encodings
-        //     .contains(&PositionEncodingKind::Utf32)
-        //     .or_fail()?;
 
         self.state = Some(state);
         Ok(ResponseMessage::result(InitializeResult::new()).or_fail()?)

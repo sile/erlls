@@ -217,9 +217,9 @@ impl Default for ServerCapabilities {
             document_formatting_provider: true,
             definition_provider: true,
             text_document_sync: TextDocumentSyncKind::INCREMENTAL,
+
+            // As VSCode does not support `Utf32` yet, we use `Utf16`.
             position_encoding: PositionEncodingKind::Utf16,
-            // TODO:
-            // position_encoding: PositionEncodingKind::Utf32,
         }
     }
 }
@@ -296,6 +296,19 @@ impl Position {
     pub fn new(line: usize, character: usize) -> Self {
         Self { line, character }
     }
+
+    pub fn from_efmt_position(text: &str, pos: efmt_core::span::Position) -> Self {
+        let character = text[..pos.offset()]
+            .chars()
+            .rev()
+            .take(pos.column() - 1)
+            .map(|c| c.len_utf16())
+            .sum();
+        Self {
+            line: pos.line() as usize - 1,
+            character,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -345,6 +358,7 @@ impl Range {
     }
 
     pub fn from_parse_error(e: &efmt_core::parse::Error) -> Self {
+        // TODO: Consider UTF-16
         let (start, end) = match e {
             efmt_core::parse::Error::UnexpectedEof { position, .. } => (
                 Position::new(position.line() - 1, 0),
@@ -369,15 +383,9 @@ impl Range {
         Self::new(Position::new(0, 0), Position::new(0, 0))
     }
 
-    pub fn from_efmt_range(range: std::ops::Range<efmt_core::span::Position>) -> Self {
-        let start = Position::new(
-            range.start.line() as usize - 1,
-            range.start.column() as usize - 1,
-        );
-        let end = Position::new(
-            range.end.line() as usize - 1,
-            range.end.column() as usize - 1,
-        );
+    pub fn from_efmt_range(text: &str, range: std::ops::Range<efmt_core::span::Position>) -> Self {
+        let start = Position::from_efmt_position(text, range.start);
+        let end = Position::from_efmt_position(text, range.end);
         Self { start, end }
     }
 }

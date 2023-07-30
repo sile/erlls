@@ -112,7 +112,10 @@ impl<FS: FileSystem> DefinitionProvider<FS> {
         };
         let tree = SyntaxTree::parse_as_much_as_possible(text).or_fail()?;
         if let Some(range) = tree.find_definition(target, strict) {
-            Ok(Location::new(target_uri, Range::from_efmt_range(range)))
+            Ok(Location::new(
+                target_uri,
+                Range::from_efmt_range(&tree.text(), range),
+            ))
         } else {
             visited.insert(target_uri.clone());
 

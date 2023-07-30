@@ -1,55 +1,36 @@
 use erlls_core::{config::Config, header::Header, server::LanguageServer};
 use orfail::OrFail;
 use std::{
-    io::{Read, Write},
+    io::{BufRead, Write},
     path::{Path, PathBuf},
 };
 
 fn main() -> orfail::Result<()> {
     env_logger::init();
 
-    let mut config = Config::default();
-    if let Some(kernel_lib_dir) = std::process::Command::new("erl")
-        .arg("-boot")
-        .arg("start_clean")
-        .arg("-noshell")
-        .arg("-eval")
-        .arg("io:format(code:lib_dir(kernel)).")
-        .arg("-s")
-        .arg("init")
-        .arg("stop")
-        .output()
-        .ok()
-        .and_then(|output| String::from_utf8(output.stdout).ok().map(PathBuf::from))
-    {
-        config
-            .erl_libs
-            .extend(kernel_lib_dir.parent().into_iter().map(|p| p.to_owned()));
-        config.erl_libs.push(PathBuf::from("_build/default/lib"));
-    }
-
+    let config = create_config();
     let mut server = LanguageServer::<FileSystem>::new(config);
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
     let mut stdin = stdin.lock();
     let mut stdout = stdout.lock();
-    let mut content_buf = Vec::new();
+    let mut buf = Vec::new();
     loop {
-        let header = Header::from_reader(&mut stdin).or_fail()?;
-        log::debug!("Received header: {:?}", header);
+        read_message(&mut stdin, &mut buf).or_fail()?;
+        log::debug!("Received JSON: {}", std::str::from_utf8(&buf).or_fail()?);
 
-        content_buf.resize(header.content_length as usize, 0);
-        stdin.read_exact(&mut content_buf).or_fail()?;
-        log::debug!(
-            "Received JSON: {}",
-            std::str::from_utf8(&content_buf).or_fail()?
-        );
-
-        server.handle_incoming_message(&content_buf);
+        server.handle_incoming_message(&buf);
         while let Some(msg) = server.take_outgoing_message() {
             write_message(&mut stdout, &msg).or_fail()?;
         }
     }
+}
+
+fn read_message<R: BufRead>(reader: &mut R, buf: &mut Vec<u8>) -> orfail::Result<()> {
+    let header = Header::from_reader(reader).or_fail()?;
+    buf.resize(header.content_length as usize, 0);
+    reader.read_exact(buf).or_fail()?;
+    Ok(())
 }
 
 fn write_message<W: Write>(writer: &mut W, msg: &[u8]) -> orfail::Result<()> {
@@ -82,4 +63,27 @@ impl erlls_core::fs::FileSystem for FileSystem {
         }
         Ok(dirs)
     }
+}
+
+fn create_config() -> Config {
+    let mut config = Config::default();
+    if let Some(kernel_lib_dir) = std::process::Command::new("erl")
+        .arg("-boot")
+        .arg("start_clean")
+        .arg("-noshell")
+        .arg("-eval")
+        .arg("io:format(code:lib_dir(kernel)).")
+        .arg("-s")
+        .arg("init")
+        .arg("stop")
+        .output()
+        .ok()
+        .and_then(|output| String::from_utf8(output.stdout).ok().map(PathBuf::from))
+    {
+        config
+            .erl_libs
+            .extend(kernel_lib_dir.parent().into_iter().map(|p| p.to_owned()));
+        config.erl_libs.push(PathBuf::from("_build/default/lib"));
+    }
+    config
 }

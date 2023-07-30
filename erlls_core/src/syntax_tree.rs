@@ -2,7 +2,10 @@ use crate::{config::Config, fs::FileSystem, message::DocumentUri};
 use efmt_core::{items::Macro, parse::TokenStream, span::Position, span::Span};
 use erl_tokenize::{values::Symbol, Tokenizer};
 use orfail::OrFail;
-use std::path::{Component, PathBuf};
+use std::{
+    path::{Component, PathBuf},
+    sync::Arc,
+};
 
 pub type ItemRange = std::ops::Range<Position>;
 
@@ -38,6 +41,10 @@ pub struct SyntaxTree {
 }
 
 impl SyntaxTree {
+    pub fn text(&self) -> Arc<String> {
+        self.ts.text()
+    }
+
     pub fn parse(text: String) -> orfail::Result<Self> {
         let tokenizer = Tokenizer::new(text);
         // TODO: tokenizer.set_file(path);

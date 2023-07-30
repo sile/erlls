@@ -36,26 +36,41 @@ pub struct Text {
 
 impl Text {
     pub fn new(text: &str) -> Self {
-        // TODO: conssider newline character
         let lines = text.split("\n").map(|s| s.to_string()).collect();
         Self { lines }
     }
 
-    pub fn to_efmt_position(&self, position: Position) -> efmt_core::span::Position {
+    pub fn to_efmt_position(&self, mut position: Position) -> efmt_core::span::Position {
         let mut offset = 0;
+        let mut last_line = None;
         for line in self.lines.iter().take(position.line) {
             offset += line.len() + 1;
+            last_line = Some(line);
         }
-        offset += position.character;
+
+        for (i, c) in last_line
+            .into_iter()
+            .flat_map(|line| line.chars())
+            .enumerate()
+        {
+            if c.len_utf16() == 2 {
+                position.character -= 1;
+            }
+            if i == position.character {
+                break;
+            }
+        }
+
         efmt_core::span::Position::new(offset, position.line + 1, position.character + 1)
     }
 
     pub fn apply_change(&mut self, mut range: Range, text: &str) -> orfail::Result<()> {
-        log::info!(
+        log::debug!(
             "Apply change: range={:?}, lines={:?}",
             range,
             self.lines.len()
         );
+
         // TODO: optimize (use drain)
         while range.start.line + 1 < range.end.line {
             self.lines.remove(range.start.line + 1);
@@ -79,7 +94,7 @@ impl Text {
             }
         };
 
-        let mut lines = text.split("\n"); // TODO: consider newline character
+        let mut lines = text.split("\n");
         if let Some(line) = lines.next() {
             self.lines
                 .get_mut(range.start.line)
@@ -99,12 +114,13 @@ impl Text {
         Ok(())
     }
 
-    fn utf8_column_offset(&self, position: Position) -> orfail::Result<usize> {
+    fn utf8_column_offset(&self, mut position: Position) -> orfail::Result<usize> {
         if position.character == 0 {
             return Ok(0);
         }
 
-        Ok(self
+        let mut offset = 0;
+        for (i, c) in self
             .lines
             .get(position.line)
             .or_fail()
@@ -115,13 +131,20 @@ impl Text {
                 ))
             })?
             .chars()
-            .take(position.character)
-            .map(|c| c.len_utf8())
-            .sum())
+            .enumerate()
+        {
+            if c.len_utf16() == 2 {
+                position.character -= 1;
+            }
+            if i == position.character {
+                break;
+            }
+            offset += c.len_utf8();
+        }
+        Ok(offset)
     }
 
     pub fn to_string(&self) -> String {
-        // TODO: conssider newline character
         self.lines.join("\n")
     }
 
