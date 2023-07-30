@@ -7,24 +7,21 @@ ErlLS
 [![Actions Status](https://github.com/sile/erlls/workflows/CI/badge.svg)](https://github.com/sile/erlls/actions)
 ![License](https://img.shields.io/crates/l/erlls)
 
-- https://microsoft.github.io/language-server-protocol/
+Erlang language server.
 
-Features List
--------------
+Supported LSP features
+----------------------
 
-- General features:
-  - [x] Error tolerant parser
-  - [x] `-include()`
-- LSP features:
-  - [ ] textDocument/definition
-    - [x] Module
-    - [x] Function
-    - [x] Type
-    - [x] Record
-    - [x] Macro
-    - [ ] Variable
-    - [x] Include file
-  - [x] textDocument/formatting
-    - [x] Formatting by using `efmt`
-  - [ ] textDocument/publishDiagnostics
-    - [x] Formatting error
+- [ ] [textDocument/definition](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_definition)
+  - [x] Module
+  - [x] Function
+  - [x] Type
+  - [x] Record
+  - [x] Macro
+  - [ ] Variable
+  - [x] Include file
+- [x] [textDocument/formatting](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_formatting)
+  - [x] Formatting by using [efmt](https://bithub.com/sile/efmt)
+- [ ] [textDocument/publishDiagnostics](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_publishDiagnostics)
+
+
