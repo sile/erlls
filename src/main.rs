@@ -28,16 +28,16 @@ fn main() -> orfail::Result<()> {
 
 fn read_message<R: BufRead>(reader: &mut R, buf: &mut Vec<u8>) -> orfail::Result<()> {
     let header = Header::from_reader(reader).or_fail()?;
-    buf.resize(header.content_length as usize, 0);
+    buf.resize(header.content_length, 0);
     reader.read_exact(buf).or_fail()?;
     Ok(())
 }
 
 fn write_message<W: Write>(writer: &mut W, msg: &[u8]) -> orfail::Result<()> {
     Header::new(msg.len()).to_writer(writer).or_fail()?;
-    writer.write_all(&msg).or_fail()?;
+    writer.write_all(msg).or_fail()?;
     writer.flush().or_fail()?;
-    log::debug!("Sent JSON: {}", std::str::from_utf8(&msg).or_fail()?);
+    log::debug!("Sent JSON: {}", std::str::from_utf8(msg).or_fail()?);
     Ok(())
 }
 

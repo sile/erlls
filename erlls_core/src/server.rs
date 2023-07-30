@@ -29,9 +29,9 @@ impl<FS: FileSystem> LanguageServer<FS> {
             initialized: false,
             config,
             outgoing_messages: Vec::new(),
-            document_repository: DocumentRepository::new(),
-            definition_provider: DefinitionProvider::default(),
-            formatting_provider: FormattingProvider::default(),
+            document_repository: DocumentRepository::default(),
+            definition_provider: DefinitionProvider,
+            formatting_provider: FormattingProvider,
         }
     }
 
@@ -100,9 +100,7 @@ impl<FS: FileSystem> LanguageServer<FS> {
             Err(ResponseError::server_not_initialized())
         };
 
-        result
-            .unwrap_or_else(|e| ResponseMessage::error(e))
-            .id(msg.id)
+        result.unwrap_or_else(ResponseMessage::error).id(msg.id)
     }
 
     fn handle_notification(&mut self, msg: NotificationMessage) {
@@ -112,7 +110,6 @@ impl<FS: FileSystem> LanguageServer<FS> {
         };
         if let Err(e) = self.document_repository.handle_notification(&msg).or_fail() {
             log::warn!("Failed to handle {:?} notification: reason={e}", msg.method);
-            return;
         }
     }
 

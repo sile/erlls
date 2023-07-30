@@ -17,15 +17,17 @@ pub struct DocumentRepository<FS> {
     _fs: std::marker::PhantomData<FS>,
 }
 
-impl<FS: FileSystem> DocumentRepository<FS> {
-    pub fn new() -> Self {
+impl<FS> Default for DocumentRepository<FS> {
+    fn default() -> Self {
         Self {
             config: Config::default(),
             editings: HashMap::new(),
             _fs: std::marker::PhantomData,
         }
     }
+}
 
+impl<FS: FileSystem> DocumentRepository<FS> {
     pub fn update_config(&mut self, config: Config) {
         self.config = config;
     }
@@ -38,7 +40,7 @@ impl<FS: FileSystem> DocumentRepository<FS> {
         if let Some(doc) = self.editings.get(uri) {
             Ok(doc.text.to_string())
         } else {
-            FS::read_file(&uri.path()).or_fail()
+            FS::read_file(uri.path()).or_fail()
         }
     }
 
@@ -58,11 +60,11 @@ impl<FS: FileSystem> DocumentRepository<FS> {
                 }
             })?;
             for lib_dir in &self.config.erl_libs {
-                for app_dir in FS::read_sub_dirs(&lib_dir).ok().into_iter().flatten() {
+                for app_dir in FS::read_sub_dirs(lib_dir).ok().into_iter().flatten() {
                     let app_name = app_dir
                         .file_name()
                         .and_then(|name| name.to_str())
-                        .and_then(|namd_and_version| namd_and_version.splitn(2, '-').next());
+                        .and_then(|namd_and_version| namd_and_version.split('-').next());
                     if app_name != Some(target_app_name) {
                         continue;
                     }
@@ -194,7 +196,7 @@ pub struct Text {
 
 impl Text {
     pub fn new(text: &str) -> Self {
-        let lines = text.split("\n").map(|s| s.to_string()).collect();
+        let lines = text.split('\n').map(|s| s.to_string()).collect();
         Self { lines }
     }
 
@@ -253,7 +255,7 @@ impl Text {
             }
         };
 
-        let mut lines = text.split("\n");
+        let mut lines = text.split('\n');
         if let Some(line) = lines.next() {
             self.lines
                 .get_mut(range.start.line)
@@ -303,12 +305,17 @@ impl Text {
         Ok(offset)
     }
 
-    pub fn to_string(&self) -> String {
-        self.lines.join("\n")
-    }
-
     pub fn range(&self) -> Range {
         Range::new(Position::new(0, 0), Position::new(self.lines.len(), 0))
+    }
+}
+
+impl std::fmt::Display for Text {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for line in &self.lines {
+            writeln!(f, "{}", line)?;
+        }
+        Ok(())
     }
 }
 

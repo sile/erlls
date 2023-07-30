@@ -7,7 +7,7 @@ use crate::{
     message::{DocumentFormattingParams, ResponseMessage, TextEdit},
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct FormattingProvider;
 
 impl FormattingProvider {
@@ -52,6 +52,6 @@ impl FormattingProvider {
                 new_text,
             });
         }
-        return Ok(ResponseMessage::result(edits).or_fail()?);
+        Ok(ResponseMessage::result(edits).or_fail()?)
     }
 }

@@ -305,7 +305,7 @@ impl Position {
             .map(|c| c.len_utf16())
             .sum();
         Self {
-            line: pos.line() as usize - 1,
+            line: pos.line() - 1,
             character,
         }
     }

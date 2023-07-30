@@ -8,7 +8,7 @@ use crate::{
 use orfail::OrFail;
 use std::collections::HashSet;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct DefinitionProvider;
 
 impl DefinitionProvider {
@@ -58,18 +58,17 @@ impl DefinitionProvider {
             _ => {}
         }
 
-        let location = self
-            .find_definition(
-                &target,
-                target_uri.clone(),
-                documents,
-                &mut HashSet::new(),
-                true,
-            )
-            .or_else(|_| {
-                self.find_definition(&target, target_uri, documents, &mut HashSet::new(), false)
-            })
-            .or_fail()?;
+        let location = Self::find_definition(
+            &target,
+            target_uri.clone(),
+            documents,
+            &mut HashSet::new(),
+            true,
+        )
+        .or_else(|_| {
+            Self::find_definition(&target, target_uri, documents, &mut HashSet::new(), false)
+        })
+        .or_fail()?;
         log::debug!("location: {location:?}");
 
         let response = ResponseMessage::result(location).or_fail()?;
@@ -77,7 +76,6 @@ impl DefinitionProvider {
     }
 
     fn find_definition<FS: FileSystem>(
-        &self,
         target: &Target,
         target_uri: DocumentUri, // TODO: rename
         documents: &DocumentRepository<FS>,
@@ -101,7 +99,7 @@ impl DefinitionProvider {
                         continue;
                     }
                     if let Ok(location) =
-                        self.find_definition(target, uri, documents, visited, strict)
+                        Self::find_definition(target, uri, documents, visited, strict)
                     {
                         return Ok(location);
                     }
