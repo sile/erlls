@@ -578,7 +578,7 @@ impl FindTarget for efmt_core::items::forms::ModuleAttr {
 
 impl FindDefinition for efmt_core::items::forms::ModuleAttr {
     fn find_definition(&self, _ctx: &FindDefinitionContext, target: &Target) -> Option<ItemRange> {
-        let Target::Module{ module_name, .. } = target else {
+        let Target::Module { module_name, .. } = target else {
             return None;
         };
         if self.module_name().value() != module_name {
