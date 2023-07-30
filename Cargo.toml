@@ -7,6 +7,7 @@ description = "Erlang language server"
 homepage = "https://github.com/sile/erlls"
 repository = "https://github.com/sile/erlls"
 readme = "README.md"
+exclude = ["/vscode/"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
