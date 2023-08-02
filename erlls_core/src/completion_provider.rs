@@ -23,8 +23,9 @@ impl CompletionProvider {
         let position = params.position();
         let efmt_position = document.text.to_efmt_position(position);
         let Some((module, function)) =
-            SyntaxTree::parse_partial_funcall(document.text.to_string(), efmt_position) else {
-                return Ok(ResponseMessage::null_result());
+            SyntaxTree::parse_partial_funcall(document.text.to_string(), efmt_position)
+        else {
+            return Ok(ResponseMessage::null_result());
         };
         log::debug!("target: {module:?}, {function:?}");
 
@@ -34,8 +35,7 @@ impl CompletionProvider {
         log::debug!("module_uri: {module_uri:?}");
 
         let text = documents.get_or_read_text(&module_uri).or_fail()?;
-        let Ok(tree) = SyntaxTree::parse_as_much_as_possible(text)
-        else {
+        let Ok(tree) = SyntaxTree::parse_as_much_as_possible(text) else {
             return Ok(ResponseMessage::null_result());
         };
 
