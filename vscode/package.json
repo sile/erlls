@@ -41,14 +41,13 @@
     "configuration": {
       "title": "ErlLS",
       "properties": {
-          "erlls.enableCompletion": {
-            "type": "boolean",
-            "default": true,
-            "description": "Enable LSP completion"
-          }
+        "erlls.enableCompletion": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable LSP completion"
         }
       }
-    }
+    }    
   },
   "main": "./out/extension.js",
   "scripts": {
