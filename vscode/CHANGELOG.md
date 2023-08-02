@@ -6,6 +6,13 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.3] - 2023-08-02
+
+### Added
+
+- Add basic completion support for fully qualified function and type names
+- Add `erlls.enableCompletion` setting
+
 ## [0.0.2] - 2023-07-30
 
 ### Fixed
