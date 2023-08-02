@@ -6,8 +6,6 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
-## [0.0.3] - 2023-08-02
-
 - Add basic completion support for fully qualified function and type names
 
 ## [0.0.1] - 2023-07-30
