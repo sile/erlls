@@ -1,6 +1,6 @@
 {
   "name": "erlls",
-  "displayName": "erlls",
+  "displayName": "ErlLS",
   "publisher": "sile",
   "license": "MIT",
   "description": "Language Server for Erlang",
@@ -37,7 +37,18 @@
           "rebar.config"
         ]
       }
-    ]
+    ],
+    "configuration": {
+      "title": "ErlLS",
+      "properties": {
+          "erlls.enableCompletion": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable LSP completion"
+          }
+        }
+      }
+    }
   },
   "main": "./out/extension.js",
   "scripts": {
