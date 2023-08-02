@@ -63,6 +63,7 @@ impl CompletionProvider {
             });
         }
         completions.sort_by(|a, b| (a.kind, &a.label).cmp(&(b.kind, &b.label)));
+        completions.dedup_by(|a, b| a.label == b.label);
 
         log::debug!("completions: {completions:?}");
 
