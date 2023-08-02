@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { ExtensionContext } from 'vscode';
+import * as vscode from 'vscode';
 
 import {
     LanguageClient,
@@ -10,7 +10,11 @@ import {
 
 let client: LanguageClient;
 
-export function activate(context: ExtensionContext) {
+export function activate(context: vscode.ExtensionContext) {
+    const config = vscode.workspace.getConfiguration("erlls");
+    const enableCompletion = config.get<boolean>("enableCompletion");
+    const configJson = JSON.stringify({ enableCompletion });
+
     const serverModule = context.asAbsolutePath(
         path.join('out', 'server.js')
     );
@@ -21,12 +25,12 @@ export function activate(context: ExtensionContext) {
     const serverOptions: ServerOptions = {
         run: {
             module: serverModule,
-            args: [wasmPath],
+            args: [wasmPath, configJson],
             transport: TransportKind.ipc
         },
         debug: {
             module: serverModule,
-            args: [wasmPath],
+            args: [wasmPath, configJson],
             transport: TransportKind.ipc,
         }
     };

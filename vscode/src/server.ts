@@ -15,6 +15,9 @@ let wasmMemory: WebAssembly.Memory | undefined;
 let wasmInstance: WebAssembly.Instance | undefined;
 let serverPtr: number = 0;
 
+const configJson = args[1];
+const config = JSON.parse(configJson);
+
 const connection = createConnection();
 
 async function initializeWasm() {
@@ -151,7 +154,13 @@ connection.onInitialize(async (params) => {
         method: "initialize",
         params
     };
-    const resultParams = await handleIncomingMessage(message);
+    const resultParams = await handleIncomingMessage(message) as InitializeResult;
+
+    if (!config.enableCompletion) {
+        connection.console.info("Disabling completion provider");
+        resultParams.capabilities.completionProvider = undefined;
+    }
+
     return resultParams as InitializeResult;
 });
 
