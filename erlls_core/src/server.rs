@@ -10,6 +10,7 @@ use crate::{
         InitializeParams, InitializeResult, Message, NotificationMessage, RequestMessage,
         ResponseMessage,
     },
+    semantic_tokens_provider::SemanticTokensProvider,
 };
 use orfail::OrFail;
 use serde::Deserialize;
@@ -23,6 +24,7 @@ pub struct LanguageServer<FS> {
     definition_provider: DefinitionProvider,
     formatting_provider: FormattingProvider,
     completion_provider: CompletionProvider,
+    semantic_tokens_provider: SemanticTokensProvider,
 }
 
 impl<FS: FileSystem> LanguageServer<FS> {
@@ -35,6 +37,7 @@ impl<FS: FileSystem> LanguageServer<FS> {
             definition_provider: DefinitionProvider,
             formatting_provider: FormattingProvider,
             completion_provider: CompletionProvider,
+            semantic_tokens_provider: SemanticTokensProvider,
         }
     }
 
@@ -98,6 +101,12 @@ impl<FS: FileSystem> LanguageServer<FS> {
                     self.completion_provider
                         .handle_request(params, &mut self.document_repository)
                 }),
+                "textDocument/semanticTokens/range" => {
+                    deserialize_params(msg.params).and_then(|params| {
+                        self.semantic_tokens_provider
+                            .handle_range_request(params, &mut self.document_repository)
+                    })
+                }
                 "shutdown" => Ok(ResponseMessage::default()),
                 _ => {
                     todo!("handle_request: method={}", msg.method)

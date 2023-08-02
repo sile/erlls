@@ -215,6 +215,7 @@ pub struct ServerCapabilities {
     pub document_formatting_provider: bool,
     pub definition_provider: bool,
     pub completion_provider: CompletionOptions,
+    pub semantic_tokens_provider: serde_json::Value,
     pub text_document_sync: TextDocumentSyncKind,
     pub position_encoding: PositionEncodingKind,
 }
@@ -225,12 +226,42 @@ impl Default for ServerCapabilities {
             document_formatting_provider: true,
             definition_provider: true,
             completion_provider: CompletionOptions::default(),
+            semantic_tokens_provider: serde_json::json!({
+                "legend": {
+                    "tokenTypes": [
+                        "namespace",
+                        "type",
+                        "struct",
+                        "typeParameter",
+                        "parameter",
+                        "variable",
+                        "property",
+                        "function",
+                        "macro",
+                        "keyword",
+                        "comment",
+                        "string",
+                        "number",
+                        "operator"
+                    ],
+                    "tokenModifiers": []
+                },
+                "range": true,
+                "full": { "delta": true }
+            }),
             text_document_sync: TextDocumentSyncKind::INCREMENTAL,
 
             // As VSCode does not support `Utf32` yet, we use `Utf16`.
             position_encoding: PositionEncodingKind::Utf16,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SemanticTokensRangeParams {
+    pub text_document: TextDocumentIdentifier,
+    pub range: Range,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
