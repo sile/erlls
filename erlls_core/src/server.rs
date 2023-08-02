@@ -92,11 +92,11 @@ impl<FS: FileSystem> LanguageServer<FS> {
                 }),
                 "textDocument/definition" => deserialize_params(msg.params).and_then(|params| {
                     self.definition_provider
-                        .handle_request(params, &self.document_repository)
+                        .handle_request(params, &mut self.document_repository)
                 }),
                 "textDocument/completion" => deserialize_params(msg.params).and_then(|params| {
                     self.completion_provider
-                        .handle_request(params, &self.document_repository)
+                        .handle_request(params, &mut self.document_repository)
                 }),
                 "shutdown" => Ok(ResponseMessage::default()),
                 _ => {

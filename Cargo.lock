@@ -78,7 +78,7 @@ dependencies = [
 
 [[package]]
 name = "erlls"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "env_logger",
  "erlls_core",
@@ -88,7 +88,7 @@ dependencies = [
 
 [[package]]
 name = "erlls_core"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "efmt_core",
  "erl_tokenize",
@@ -101,7 +101,7 @@ dependencies = [
 
 [[package]]
 name = "erlls_wasm"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "erlls_core",
  "orfail",

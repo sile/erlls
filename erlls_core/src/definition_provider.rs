@@ -15,7 +15,7 @@ impl DefinitionProvider {
     pub fn handle_request<FS: FileSystem>(
         &mut self,
         params: DefinitionParams,
-        documents: &DocumentRepository<FS>,
+        documents: &mut DocumentRepository<FS>,
     ) -> Result<ResponseMessage, ResponseError> {
         let document = documents
             .get_from_editings(&params.text_document().uri)

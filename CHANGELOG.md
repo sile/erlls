@@ -6,6 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.4] - 2023-08-02
+
+### Added
+
+- Add a cache when resolving module URIs
+
 ## [0.0.3] - 2023-08-02
 
 ### Added

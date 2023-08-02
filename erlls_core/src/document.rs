@@ -14,6 +14,7 @@ use std::{collections::HashMap, path::Component};
 pub struct DocumentRepository<FS> {
     config: Config,
     editings: HashMap<DocumentUri, Document>,
+    module_uri_cache: HashMap<String, DocumentUri>,
     _fs: std::marker::PhantomData<FS>,
 }
 
@@ -22,6 +23,7 @@ impl<FS> Default for DocumentRepository<FS> {
         Self {
             config: Config::default(),
             editings: HashMap::new(),
+            module_uri_cache: HashMap::new(),
             _fs: std::marker::PhantomData,
         }
     }
@@ -93,13 +95,21 @@ impl<FS: FileSystem> DocumentRepository<FS> {
         None
     }
 
-    pub fn resolve_module_uri(&self, module_name: &str) -> orfail::Result<DocumentUri> {
+    pub fn resolve_module_uri(&mut self, module_name: &str) -> orfail::Result<DocumentUri> {
+        if let Some(uri) = self.module_uri_cache.get(module_name) {
+            log::debug!("Module URI cache hit: module={}, uri={}", module_name, uri);
+            return Ok(uri.clone());
+        }
+
         let path = self
             .config
             .root_dir
             .join(format!("src/{}.erl", module_name));
         if FS::exists(&path) {
-            return DocumentUri::from_path(&self.config.root_dir, path).or_fail();
+            let uri = DocumentUri::from_path(&self.config.root_dir, path).or_fail()?;
+            self.module_uri_cache
+                .insert(module_name.to_string(), uri.clone());
+            return Ok(uri);
         }
 
         let path = self
@@ -107,14 +117,19 @@ impl<FS: FileSystem> DocumentRepository<FS> {
             .root_dir
             .join(format!("test/{}.erl", module_name));
         if FS::exists(&path) {
-            return DocumentUri::from_path(&self.config.root_dir, path).or_fail();
+            let uri = DocumentUri::from_path(&self.config.root_dir, path).or_fail()?;
+            self.module_uri_cache
+                .insert(module_name.to_string(), uri.clone());
+            return Ok(uri);
         }
 
         for lib_dir in &self.config.erl_libs {
             for app_dir in FS::read_sub_dirs(lib_dir).ok().into_iter().flatten() {
                 let path = app_dir.join(format!("src/{}.erl", module_name));
                 if FS::exists(&path) {
-                    return DocumentUri::from_path(&self.config.root_dir, path).or_fail();
+                    let uri = DocumentUri::from_path(&self.config.root_dir, path).or_fail()?;
+                    self.module_uri_cache
+                        .insert(module_name.to_string(), uri.clone());
                 }
             }
         }

@@ -1,6 +1,6 @@
 [package]
 name = "erlls"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Erlang language server"
@@ -12,7 +12,7 @@ exclude = ["/vscode/"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-erlls_core = { version = "0.0.3", path = "erlls_core/" }
+erlls_core = { version = "0.0", path = "erlls_core/" }
 env_logger = "0.10.0"
 log = { version = "0.4.19", features = ["release_max_level_debug"] }
 orfail = { version = "0.1.3", features = ["serde"] }
