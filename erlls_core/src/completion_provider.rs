@@ -34,7 +34,8 @@ impl CompletionProvider {
         log::debug!("module_uri: {module_uri:?}");
 
         let text = documents.get_or_read_text(&module_uri).or_fail()?;
-        let Ok(tree) = SyntaxTree::parse_as_much_as_possible(text) else {
+        let Ok(tree) = SyntaxTree::parse_as_much_as_possible(text)
+        else {
             return Ok(ResponseMessage::null_result());
         };
 
