@@ -60,6 +60,13 @@ impl ResponseMessage {
         })
     }
 
+    pub fn null_result() -> Self {
+        Self {
+            result: Some(serde_json::Value::Null),
+            ..Self::default()
+        }
+    }
+
     pub fn error(error: ResponseError) -> Self {
         Self {
             error: Some(error),
@@ -207,6 +214,7 @@ impl Default for ServerInfo {
 pub struct ServerCapabilities {
     pub document_formatting_provider: bool,
     pub definition_provider: bool,
+    pub completion_provider: CompletionOptions,
     pub text_document_sync: TextDocumentSyncKind,
     pub position_encoding: PositionEncodingKind,
 }
@@ -216,12 +224,83 @@ impl Default for ServerCapabilities {
         Self {
             document_formatting_provider: true,
             definition_provider: true,
+            completion_provider: CompletionOptions::default(),
             text_document_sync: TextDocumentSyncKind::INCREMENTAL,
 
             // As VSCode does not support `Utf32` yet, we use `Utf16`.
             position_encoding: PositionEncodingKind::Utf16,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompletionOptions {
+    pub trigger_characters: Vec<String>,
+}
+
+impl Default for CompletionOptions {
+    fn default() -> Self {
+        Self {
+            trigger_characters: vec![":".to_owned()],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompletionParams {
+    #[serde(flatten)]
+    inherit0: TextDocumentPositionParams,
+}
+
+impl CompletionParams {
+    pub fn text_document(&self) -> &TextDocumentIdentifier {
+        &self.inherit0.text_document
+    }
+
+    pub fn position(&self) -> Position {
+        self.inherit0.position
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompletionItem {
+    pub label: String,
+    pub kind: CompletionItemKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct CompletionItemKind(u8);
+
+impl CompletionItemKind {
+    pub const TEXT: Self = Self(1);
+    pub const METHOD: Self = Self(2);
+    pub const FUNCTION: Self = Self(3);
+    pub const CONSTRUCTOR: Self = Self(4);
+    pub const FIELD: Self = Self(5);
+    pub const VARIABLE: Self = Self(6);
+    pub const CLASS: Self = Self(7);
+    pub const INTERFACE: Self = Self(8);
+    pub const MODULE: Self = Self(9);
+    pub const PROPERTY: Self = Self(10);
+    pub const UNIT: Self = Self(11);
+    pub const VALUE: Self = Self(12);
+    pub const ENUM: Self = Self(13);
+    pub const KEYWORD: Self = Self(14);
+    pub const SNIPPET: Self = Self(15);
+    pub const COLOR: Self = Self(16);
+    pub const FILE: Self = Self(17);
+    pub const REFERENCE: Self = Self(18);
+    pub const FOLLOW: Self = Self(19);
+    pub const ENUM_MEMBER: Self = Self(20);
+    pub const CONSTANT: Self = Self(21);
+    pub const STRUCT: Self = Self(22);
+    pub const EVENT: Self = Self(23);
+    pub const OPERATOR: Self = Self(24);
+    pub const TYPE_PARAMETER: Self = Self(25);
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

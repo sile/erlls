@@ -117,6 +117,28 @@ impl SyntaxTree {
         Err(orfail::Failure::new().message("failed to parse"))
     }
 
+    pub fn parse_partial_funcall(
+        text: String,
+        position: Position,
+    ) -> Option<(String, Option<String>)> {
+        let tree = Self::partial_parse(text, position).ok()?;
+        let Some(efmt_core::items::Either::A((module, _, function))) = tree.expr else {
+            return None;
+        };
+
+        if let Some(offset) = position
+            .offset()
+            .checked_sub(function.start_position().offset())
+        {
+            Some((
+                module.value().to_owned(),
+                function.get().map(|x| x.value()[..offset].to_owned()),
+            ))
+        } else {
+            Some((module.value().to_owned(), None))
+        }
+    }
+
     pub fn collect_includes(&self) -> Vec<Include> {
         self.module
             .iter()
@@ -133,6 +155,29 @@ impl SyntaxTree {
                 }
             })
             .collect()
+    }
+
+    pub fn iter_exports(&self) -> impl '_ + Iterator<Item = Export> {
+        self.module
+            .iter()
+            .flat_map(|x| x.children())
+            .chain(self.maybe_partial_module.iter().flat_map(|x| x.children()))
+            .filter_map(|form| {
+                if let efmt_core::items::forms::Form::Export(x) = form.get() {
+                    Some(x)
+                } else {
+                    None
+                }
+            })
+            .flat_map(|x| {
+                x.exports().iter().map(|e| Export {
+                    is_type: !x.is_function(),
+                    name: e.name().value().to_owned(),
+
+                    // TODO: handle arity parse error
+                    arity: e.arity().text(&self.ts.text()).parse().unwrap_or(0),
+                })
+            })
     }
 
     pub fn find_definition(&self, target: &Target, strict: bool) -> Option<ItemRange> {
@@ -1099,6 +1144,13 @@ impl Target {
 pub struct Include {
     pub is_lib: bool,
     pub path: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Export {
+    pub is_type: bool,
+    pub name: String,
+    pub arity: usize,
 }
 
 #[cfg(test)]

@@ -1,4 +1,5 @@
 use crate::{
+    completion_provider::CompletionProvider,
     config::Config,
     definition_provider::DefinitionProvider,
     document::DocumentRepository,
@@ -21,6 +22,7 @@ pub struct LanguageServer<FS> {
     document_repository: DocumentRepository<FS>,
     definition_provider: DefinitionProvider,
     formatting_provider: FormattingProvider,
+    completion_provider: CompletionProvider,
 }
 
 impl<FS: FileSystem> LanguageServer<FS> {
@@ -32,6 +34,7 @@ impl<FS: FileSystem> LanguageServer<FS> {
             document_repository: DocumentRepository::default(),
             definition_provider: DefinitionProvider,
             formatting_provider: FormattingProvider,
+            completion_provider: CompletionProvider,
         }
     }
 
@@ -89,6 +92,10 @@ impl<FS: FileSystem> LanguageServer<FS> {
                 }),
                 "textDocument/definition" => deserialize_params(msg.params).and_then(|params| {
                     self.definition_provider
+                        .handle_request(params, &self.document_repository)
+                }),
+                "textDocument/completion" => deserialize_params(msg.params).and_then(|params| {
+                    self.completion_provider
                         .handle_request(params, &self.document_repository)
                 }),
                 "shutdown" => Ok(ResponseMessage::default()),

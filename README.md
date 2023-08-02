@@ -21,7 +21,13 @@ Supported LSP features
   - [x] Include file
 - [x] [textDocument/formatting](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_formatting)
   - [x] Formatting documents by using [efmt](https://bithub.com/sile/efmt)
+- [ ] [textDocument/completion](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_completion)
+  - [x] Fully qualified function name
+  - [x] Fully qualified type name
+  - [ ] Record name
+  - [ ] Record field name
 - [ ] [textDocument/publishDiagnostics](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_publishDiagnostics)
+- [ ] [textDocument/rename](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_rename)
 
 Editor integrations
 -------------------

@@ -1,3 +1,4 @@
+pub mod completion_provider;
 pub mod config;
 pub mod definition_provider;
 pub mod document;
