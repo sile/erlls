@@ -226,28 +226,22 @@ impl Default for ServerCapabilities {
             document_formatting_provider: true,
             definition_provider: true,
             completion_provider: CompletionOptions::default(),
+
+            // TODO: use struct
             semantic_tokens_provider: serde_json::json!({
                 "legend": {
                     "tokenTypes": [
-                        "namespace",
-                        "type",
-                        "struct",
-                        "typeParameter",
-                        "parameter",
-                        "variable",
-                        "property",
-                        "function",
-                        "macro",
-                        "keyword",
                         "comment",
                         "string",
+                        "keyword",
+                        "variable",
                         "number",
                         "operator"
                     ],
                     "tokenModifiers": []
                 },
                 "range": true,
-                "full": { "delta": true }
+                "full": true
             }),
             text_document_sync: TextDocumentSyncKind::INCREMENTAL,
 
@@ -255,6 +249,12 @@ impl Default for ServerCapabilities {
             position_encoding: PositionEncodingKind::Utf16,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SemanticTokensParams {
+    pub text_document: TextDocumentIdentifier,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -585,7 +585,7 @@ pub struct PublishDiagnosticsParams {
     pub version: Option<i32>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SemanticTokenType {
     Namespace,
@@ -613,7 +613,7 @@ pub enum SemanticTokenType {
     Decorator,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SemanticTokenModifier {
     Declaration,
@@ -630,13 +630,13 @@ pub enum SemanticTokenModifier {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum TokenFormat {
-    Relative,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SemanticTokensLegend {
     pub token_types: Vec<SemanticTokenType>,
     pub token_modifiers: Vec<SemanticTokenModifier>,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SemanticTokens {
+    pub data: Vec<u32>,
 }

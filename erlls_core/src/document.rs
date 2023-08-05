@@ -323,6 +323,18 @@ impl Text {
     pub fn range(&self) -> Range {
         Range::new(Position::new(0, 0), Position::new(self.lines.len(), 0))
     }
+
+    /// Returns the string of the specified range.
+    ///
+    /// Note that this method only considers the line number of the range.
+    pub fn to_range_string(&self, range: Range) -> String {
+        let mut s = String::new();
+        for line in self.lines[range.start.line..range.end.line].iter() {
+            s.push_str(line);
+            s.push('\n');
+        }
+        s
+    }
 }
 
 impl std::fmt::Display for Text {
