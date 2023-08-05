@@ -15,7 +15,23 @@ use orfail::OrFail;
 pub struct SemanticTokensProvider;
 
 impl SemanticTokensProvider {
-    // TODO: provider_options() -> serde_json::Value
+    pub fn options() -> serde_json::Value {
+        serde_json::json!({
+            "legend": {
+                "tokenTypes": [
+                    "comment",
+                    "string",
+                    "keyword",
+                    "variable",
+                    "number",
+                    "operator"
+                ],
+                "tokenModifiers": []
+            },
+            "range": true,
+            "full": true
+        })
+    }
 
     pub fn handle_full_request<FS: FileSystem>(
         &mut self,
@@ -93,7 +109,7 @@ impl SemanticTokensProvider {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct SemanticToken {
+struct SemanticToken {
     pub delta_line: u32,
     pub delta_start: u32,
     pub length: u32,
@@ -102,7 +118,7 @@ pub struct SemanticToken {
 }
 
 impl SemanticToken {
-    pub fn new(
+    fn new(
         token: &impl PositionRange,
         last_position: TokenizePosition,
         ty: SemanticTokenType,
@@ -131,7 +147,7 @@ impl SemanticToken {
         }
     }
 
-    pub fn iter(self) -> impl Iterator<Item = u32> {
+    fn iter(self) -> impl Iterator<Item = u32> {
         [
             self.delta_line,
             self.delta_start,

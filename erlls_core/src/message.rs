@@ -1,4 +1,4 @@
-use crate::error::ResponseError;
+use crate::{error::ResponseError, semantic_tokens_provider::SemanticTokensProvider};
 use orfail::OrFail;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -226,23 +226,7 @@ impl Default for ServerCapabilities {
             document_formatting_provider: true,
             definition_provider: true,
             completion_provider: CompletionOptions::default(),
-
-            // TODO: use struct
-            semantic_tokens_provider: serde_json::json!({
-                "legend": {
-                    "tokenTypes": [
-                        "comment",
-                        "string",
-                        "keyword",
-                        "variable",
-                        "number",
-                        "operator"
-                    ],
-                    "tokenModifiers": []
-                },
-                "range": true,
-                "full": true
-            }),
+            semantic_tokens_provider: SemanticTokensProvider::options(),
             text_document_sync: TextDocumentSyncKind::INCREMENTAL,
 
             // As VSCode does not support `Utf32` yet, we use `Utf16`.
