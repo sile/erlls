@@ -455,7 +455,7 @@ impl FindDefinition for efmt_core::items::forms::RecordDecl {
 impl FindTarget for efmt_core::items::forms::ExportAttr {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         for e in self.exports() {
-            if e.name().contains_inclusive(position) {
+            if e.contains_inclusive(position) {
                 let position = e.name().start_position();
                 let module_name = None;
                 let name = e.name().value().to_owned();
@@ -903,7 +903,7 @@ impl FindTarget for efmt_core::items::expressions::FunctionExpr {
             }
         }
         if let Some(x) = self.function_name() {
-            if x.contains_inclusive(position) {
+            if self.contains_inclusive(position) {
                 if let Some(arity) = self.arity().and_then(|x| {
                     x.as_integer_token()
                         .and_then(|x| x.text(text).parse::<usize>().ok())
