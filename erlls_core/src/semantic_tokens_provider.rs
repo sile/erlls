@@ -24,7 +24,8 @@ impl SemanticTokensProvider {
                     "keyword",
                     "variable",
                     "number",
-                    "operator"
+                    "operator",
+                    "namespace"
                 ],
                 "tokenModifiers": []
             },
@@ -61,50 +62,91 @@ impl SemanticTokensProvider {
         let text = doc.text.to_range_string(params.range);
 
         let mut tokenizer = erl_tokenize::Tokenizer::new(&text);
-        let mut last_position = tokenizer.next_position();
         let mut semantic_tokens = SemanticTokens::default();
+        let mut highlighter = Highlighter::default();
         while let Some(token) = tokenizer.next() {
             let Ok(token) = token else {
                 tokenizer.consume_char();
                 continue;
             };
 
-            // if token.end_position().line() != token.start_position().line() {
-            //     // TODO
-            //     continue;
-            // }
-
-            let semantic_token = match token {
-                erl_tokenize::Token::Atom(_) => {
-                    continue;
-                }
-                erl_tokenize::Token::Comment(_) => {
-                    SemanticToken::new(&token, last_position, SemanticTokenType::Comment)
-                }
-                erl_tokenize::Token::Float(_) | erl_tokenize::Token::Integer(_) => {
-                    SemanticToken::new(&token, last_position, SemanticTokenType::Number)
-                }
-                erl_tokenize::Token::Keyword(_) => {
-                    SemanticToken::new(&token, last_position, SemanticTokenType::Keyword)
-                }
-                erl_tokenize::Token::Char(_) | erl_tokenize::Token::String(_) => {
-                    SemanticToken::new(&token, last_position, SemanticTokenType::String)
-                }
-                erl_tokenize::Token::Symbol(_) => {
-                    SemanticToken::new(&token, last_position, SemanticTokenType::Operator)
-                }
-                erl_tokenize::Token::Variable(_) => {
-                    SemanticToken::new(&token, last_position, SemanticTokenType::Variable)
-                }
-                erl_tokenize::Token::Whitespace(_) => {
-                    continue;
-                }
+            if let Some(token) = highlighter.handle_raw_token(token) {
+                semantic_tokens.data.extend(token.iter());
             };
-            semantic_tokens.data.extend(semantic_token.iter());
-            last_position = token.start_position();
         }
 
         Ok(ResponseMessage::result(semantic_tokens).or_fail()?)
+    }
+}
+
+#[derive(Debug, Default)]
+struct Highlighter {
+    last_start_position: TokenizePosition,
+    prev_tokens: Vec<erl_tokenize::Token>,
+    next_atom_is_module: bool,
+}
+
+impl Highlighter {
+    fn handle_raw_token(&mut self, token: erl_tokenize::Token) -> Option<SemanticToken> {
+        let last = self.last_start_position.clone();
+        let semantic_token = match &token {
+            erl_tokenize::Token::Comment(_) => {
+                self.prev_tokens.clear();
+                SemanticToken::new(&token, last, SemanticTokenType::Comment)
+            }
+            erl_tokenize::Token::Float(_) | erl_tokenize::Token::Integer(_) => {
+                self.prev_tokens.clear();
+                SemanticToken::new(&token, last, SemanticTokenType::Number)
+            }
+            erl_tokenize::Token::Keyword(_) => {
+                self.prev_tokens.clear();
+                SemanticToken::new(&token, last, SemanticTokenType::Keyword)
+            }
+            erl_tokenize::Token::Char(_) | erl_tokenize::Token::String(_) => {
+                SemanticToken::new(&token, last, SemanticTokenType::String)
+            }
+            erl_tokenize::Token::Symbol(_) => {
+                self.prev_tokens.push(token);
+                return None;
+            }
+            erl_tokenize::Token::Variable(_) => {
+                SemanticToken::new(&token, last, SemanticTokenType::Variable)
+            }
+            erl_tokenize::Token::Whitespace(_) => {
+                self.prev_tokens.clear();
+                return None;
+            }
+            erl_tokenize::Token::Atom(x) => {
+                let ty = self.handle_atom(x)?;
+                SemanticToken::new(&token, last, ty)
+            }
+        };
+        self.last_start_position = token.start_position();
+        Some(semantic_token)
+    }
+
+    fn handle_atom(&mut self, a: &erl_tokenize::tokens::AtomToken) -> Option<SemanticTokenType> {
+        use erl_tokenize::values::Symbol;
+        use erl_tokenize::Token;
+
+        if self.next_atom_is_module {
+            self.next_atom_is_module = false;
+            self.prev_tokens.clear();
+            return Some(SemanticTokenType::Namespace);
+        }
+
+        let Some(Token::Symbol(s)) = self.prev_tokens.first() else {
+            return None;
+        };
+        if s.value() == Symbol::Hyphen {
+            self.prev_tokens.clear();
+            if a.value() == "module" {
+                self.next_atom_is_module = true;
+            }
+            Some(SemanticTokenType::Keyword)
+        } else {
+            None
+        }
     }
 }
 
@@ -130,6 +172,7 @@ impl SemanticToken {
             SemanticTokenType::Variable => 3,
             SemanticTokenType::Number => 4,
             SemanticTokenType::Operator => 5,
+            SemanticTokenType::Namespace => 6,
             _ => unreachable!(),
         };
         let delta_line = (token.start_position().line() - last_position.line()) as u32;
