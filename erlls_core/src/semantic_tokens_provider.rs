@@ -9,7 +9,7 @@ use crate::{
         SemanticTokensRangeParams,
     },
 };
-use erl_tokenize::Position as TokenizePosition;
+use erl_tokenize::{values::Keyword, Position as TokenizePosition};
 use erl_tokenize::{values::Symbol, PositionRange};
 use orfail::OrFail;
 
@@ -29,7 +29,9 @@ impl SemanticTokensProvider {
                     "class",
                     "function",
                     "macro",
-                    "struct"
+                    "struct",
+                    "operator",
+                    "property"
                 ],
                 "tokenModifiers": []
             },
@@ -66,7 +68,6 @@ impl SemanticTokensProvider {
         let text = doc.text.to_range_string(params.range);
 
         let mut tokenizer = erl_tokenize::Tokenizer::new(&text);
-        let mut semantic_tokens = SemanticTokens::default();
         let mut highlighter = Highlighter::new();
         while let Some(token) = tokenizer.next() {
             let Ok(token) = token else {
@@ -74,19 +75,28 @@ impl SemanticTokensProvider {
                 continue;
             };
 
-            if let Some(token) = highlighter.handle_token(token) {
-                semantic_tokens.data.extend(token.iter());
-            };
+            highlighter.handle_token(token);
         }
 
-        Ok(ResponseMessage::result(semantic_tokens).or_fail()?)
+        Ok(ResponseMessage::result(highlighter.semantic_tokens).or_fail()?)
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum BlockType {
+    Block,
+    Paren,
+    Brace,
+    Square,
+    BitString,
 }
 
 #[derive(Debug)]
 struct Highlighter {
     last_start_position: TokenizePosition,
     prev_tokens: VecDeque<erl_tokenize::Token>,
+    semantic_tokens: SemanticTokens,
+    block_stack: Vec<BlockType>,
 }
 
 impl Highlighter {
@@ -94,38 +104,36 @@ impl Highlighter {
         Self {
             last_start_position: Default::default(),
             prev_tokens: VecDeque::new(),
+            semantic_tokens: SemanticTokens::default(),
+            block_stack: Vec::new(),
         }
     }
 
-    fn make_semantic_token(
-        &mut self,
-        token: &impl PositionRange,
-        ty: SemanticTokenType,
-    ) -> SemanticToken {
+    fn add_semantic_token(&mut self, token: &impl PositionRange, ty: SemanticTokenType) {
         let semantic_token = SemanticToken::new(token, self.last_start_position.clone(), ty);
         self.last_start_position = token.start_position();
-        semantic_token
+        self.semantic_tokens.data.extend(semantic_token.iter());
     }
 
-    fn handle_token(&mut self, token: erl_tokenize::Token) -> Option<SemanticToken> {
-        let result = match &token {
-            erl_tokenize::Token::Whitespace(_) => None,
+    fn handle_token(&mut self, token: erl_tokenize::Token) {
+        match &token {
+            erl_tokenize::Token::Whitespace(_) => {}
             erl_tokenize::Token::Comment(_) => {
-                Some(self.make_semantic_token(&token, SemanticTokenType::Comment))
+                self.add_semantic_token(&token, SemanticTokenType::Comment);
             }
             erl_tokenize::Token::Float(_) | erl_tokenize::Token::Integer(_) => {
-                Some(self.make_semantic_token(&token, SemanticTokenType::Number))
+                self.add_semantic_token(&token, SemanticTokenType::Number);
             }
-            erl_tokenize::Token::Keyword(_) => {
-                Some(self.make_semantic_token(&token, SemanticTokenType::Keyword))
+            erl_tokenize::Token::Keyword(token) => {
+                self.handle_keyword_token(token);
             }
             erl_tokenize::Token::Char(_) | erl_tokenize::Token::String(_) => {
-                Some(self.make_semantic_token(&token, SemanticTokenType::String))
+                self.add_semantic_token(&token, SemanticTokenType::String);
             }
             erl_tokenize::Token::Symbol(token) => self.handle_symbol_token(token),
             erl_tokenize::Token::Variable(token) => self.handle_variable_token(token),
             erl_tokenize::Token::Atom(token) => self.handle_atom_token(token),
-        };
+        }
 
         if !matches!(
             token,
@@ -136,14 +144,39 @@ impl Highlighter {
                 self.prev_tokens.pop_front();
             }
         }
-
-        result
     }
 
-    fn handle_symbol_token(
-        &mut self,
-        token: &erl_tokenize::tokens::SymbolToken,
-    ) -> Option<SemanticToken> {
+    fn handle_keyword_token(&mut self, token: &erl_tokenize::tokens::KeywordToken) {
+        match token.value() {
+            Keyword::Begin | Keyword::Case | Keyword::Try | Keyword::Receive | Keyword::Maybe => {
+                self.block_stack.push(BlockType::Block);
+            }
+            Keyword::End => {
+                // TODO: Check the block type
+                self.block_stack.pop();
+            }
+            _ => {}
+        }
+
+        self.add_semantic_token(token, SemanticTokenType::Keyword);
+    }
+
+    fn handle_symbol_token(&mut self, token: &erl_tokenize::tokens::SymbolToken) {
+        match token.value() {
+            Symbol::OpenParen => self.block_stack.push(BlockType::Paren),
+            Symbol::OpenBrace => self.block_stack.push(BlockType::Brace),
+            Symbol::OpenSquare => self.block_stack.push(BlockType::Square),
+            Symbol::DoubleLeftAngle => self.block_stack.push(BlockType::BitString),
+            Symbol::CloseParen
+            | Symbol::CloseBrace
+            | Symbol::CloseSquare
+            | Symbol::DoubleRightAngle => {
+                // TODO: Check the block type
+                self.block_stack.pop();
+            }
+            _ => {}
+        }
+
         if token.value() == Symbol::Slash || token.value() == Symbol::OpenParen {
             if let Some(token) = self
                 .prev_tokens
@@ -151,7 +184,12 @@ impl Highlighter {
                 .and_then(|t| t.as_atom_token())
                 .cloned()
             {
-                return Some(self.make_semantic_token(&token, SemanticTokenType::Function));
+                if !(self.is_symbol_eq(1, Symbol::Hyphen)
+                    && (self.is_symbol_eq(2, Symbol::Dot) || self.prev_tokens.len() == 2))
+                {
+                    self.add_semantic_token(&token, SemanticTokenType::Function);
+                    return;
+                }
             }
         }
 
@@ -162,34 +200,81 @@ impl Highlighter {
                 .and_then(|t| t.as_atom_token())
                 .cloned()
             {
-                return Some(self.make_semantic_token(&token, SemanticTokenType::Class));
+                self.add_semantic_token(&token, SemanticTokenType::Class);
+                return;
             }
         }
 
-        None
+        if matches!(token.value(), Symbol::MapMatch | Symbol::DoubleRightArrow) {
+            if let Some(token) = self
+                .prev_tokens
+                .back()
+                .and_then(|t| t.as_atom_token())
+                .cloned()
+            {
+                self.add_semantic_token(&token, SemanticTokenType::Property);
+            }
+        } else if matches!(token.value(), Symbol::Match | Symbol::DoubleColon)
+            && matches!(self.block_stack.last(), Some(BlockType::Brace))
+        {
+            if let Some(token) = self
+                .prev_tokens
+                .back()
+                .and_then(|t| t.as_atom_token())
+                .cloned()
+            {
+                self.add_semantic_token(&token, SemanticTokenType::Property);
+            }
+        }
+
+        if matches!(
+            token.value(),
+            Symbol::Slash
+                | Symbol::Match
+                | Symbol::MapMatch
+                | Symbol::VerticalBar
+                | Symbol::DoubleVerticalBar
+                | Symbol::MaybeMatch
+                | Symbol::Not
+                | Symbol::Hyphen
+                | Symbol::MinusMinus
+                | Symbol::Plus
+                | Symbol::PlusPlus
+                | Symbol::Multiply
+                | Symbol::RightArrow
+                | Symbol::LeftArrow
+                | Symbol::DoubleRightArrow
+                | Symbol::DoubleLeftArrow
+                | Symbol::DoubleRightAngle
+                | Symbol::DoubleLeftAngle
+                | Symbol::Eq
+                | Symbol::GreaterEq
+                | Symbol::Less
+                | Symbol::LessEq
+        ) {
+            self.add_semantic_token(token, SemanticTokenType::Operator);
+            return;
+        }
     }
 
-    fn handle_variable_token(
-        &mut self,
-        token: &erl_tokenize::tokens::VariableToken,
-    ) -> Option<SemanticToken> {
+    fn handle_variable_token(&mut self, token: &erl_tokenize::tokens::VariableToken) {
         if self.is_symbol_eq(0, Symbol::Question) {
-            return Some(self.make_semantic_token(token, SemanticTokenType::Macro));
+            self.add_semantic_token(token, SemanticTokenType::Macro);
+            return;
         }
 
         if self.is_symbol_eq(0, Symbol::OpenParen) && self.is_atom_eq(1, "define") {
-            return Some(self.make_semantic_token(token, SemanticTokenType::Macro));
+            self.add_semantic_token(token, SemanticTokenType::Macro);
+            return;
         }
 
-        Some(self.make_semantic_token(token, SemanticTokenType::Variable))
+        self.add_semantic_token(token, SemanticTokenType::Variable);
     }
 
-    fn handle_atom_token(
-        &mut self,
-        token: &erl_tokenize::tokens::AtomToken,
-    ) -> Option<SemanticToken> {
+    fn handle_atom_token(&mut self, token: &erl_tokenize::tokens::AtomToken) {
         if self.is_symbol_eq(0, Symbol::Hyphen) || self.is_symbol_eq(0, Symbol::Slash) {
-            return Some(self.make_semantic_token(token, SemanticTokenType::Keyword));
+            self.add_semantic_token(token, SemanticTokenType::Keyword);
+            return;
         }
 
         if self.is_symbol_eq(0, Symbol::OpenParen)
@@ -197,26 +282,38 @@ impl Highlighter {
                 || self.is_atom_eq(1, "behaviour")
                 || self.is_atom_eq(1, "behavior"))
         {
-            return Some(self.make_semantic_token(token, SemanticTokenType::Class));
+            self.add_semantic_token(token, SemanticTokenType::Class);
+            return;
         }
 
         if self.is_symbol_eq(0, Symbol::OpenParen) && self.is_atom_eq(1, "record") {
-            return Some(self.make_semantic_token(token, SemanticTokenType::Struct));
+            self.add_semantic_token(token, SemanticTokenType::Struct);
+            return;
         }
 
         if self.is_symbol_eq(0, Symbol::OpenParen) && self.is_atom_eq(1, "define") {
-            return Some(self.make_semantic_token(token, SemanticTokenType::Macro));
+            self.add_semantic_token(token, SemanticTokenType::Macro);
+            return;
         }
 
         if self.is_symbol_eq(0, Symbol::Question) {
-            return Some(self.make_semantic_token(token, SemanticTokenType::Macro));
+            self.add_semantic_token(token, SemanticTokenType::Macro);
+            return;
         }
 
         if self.is_symbol_eq(0, Symbol::Sharp) {
-            return Some(self.make_semantic_token(token, SemanticTokenType::Struct));
+            self.add_semantic_token(token, SemanticTokenType::Struct);
+            return;
         }
 
-        None
+        if self.is_symbol_eq(0, Symbol::Dot)
+            && self.prev_tokens.back().map_or(false, |t| {
+                t.end_position().line() == token.start_position().line()
+            })
+        {
+            self.add_semantic_token(token, SemanticTokenType::Property);
+            return;
+        }
     }
 
     fn is_symbol_eq(&self, prev_n: usize, symbol: Symbol) -> bool {
@@ -263,6 +360,8 @@ impl SemanticToken {
             SemanticTokenType::Function => 6,
             SemanticTokenType::Macro => 7,
             SemanticTokenType::Struct => 8,
+            SemanticTokenType::Operator => 9,
+            SemanticTokenType::Property => 10,
             _ => unreachable!(),
         };
         let delta_line = (token.start_position().line() - last_position.line()) as u32;
