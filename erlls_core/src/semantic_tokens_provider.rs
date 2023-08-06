@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crate::{
     document::DocumentRepository,
     error::ResponseError,
@@ -8,7 +10,7 @@ use crate::{
     },
 };
 use erl_tokenize::Position as TokenizePosition;
-use erl_tokenize::PositionRange;
+use erl_tokenize::{values::Symbol, PositionRange};
 use orfail::OrFail;
 
 #[derive(Debug)]
@@ -25,7 +27,10 @@ impl SemanticTokensProvider {
                     "variable",
                     "number",
                     "operator",
-                    "namespace"
+                    "namespace",
+                    "function",
+                    "macro",
+                    "struct"
                 ],
                 "tokenModifiers": []
             },
@@ -63,14 +68,14 @@ impl SemanticTokensProvider {
 
         let mut tokenizer = erl_tokenize::Tokenizer::new(&text);
         let mut semantic_tokens = SemanticTokens::default();
-        let mut highlighter = Highlighter::default();
+        let mut highlighter = Highlighter::new();
         while let Some(token) = tokenizer.next() {
             let Ok(token) = token else {
                 tokenizer.consume_char();
                 continue;
             };
 
-            if let Some(token) = highlighter.handle_raw_token(token) {
+            if let Some(token) = highlighter.handle_token(token) {
                 semantic_tokens.data.extend(token.iter());
             };
         }
@@ -79,74 +84,150 @@ impl SemanticTokensProvider {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct Highlighter {
     last_start_position: TokenizePosition,
-    prev_tokens: Vec<erl_tokenize::Token>,
-    next_atom_is_module: bool,
+    prev_tokens: VecDeque<erl_tokenize::Token>,
 }
 
 impl Highlighter {
-    fn handle_raw_token(&mut self, token: erl_tokenize::Token) -> Option<SemanticToken> {
-        let last = self.last_start_position.clone();
-        let semantic_token = match &token {
-            erl_tokenize::Token::Comment(_) => {
-                self.prev_tokens.clear();
-                SemanticToken::new(&token, last, SemanticTokenType::Comment)
-            }
-            erl_tokenize::Token::Float(_) | erl_tokenize::Token::Integer(_) => {
-                self.prev_tokens.clear();
-                SemanticToken::new(&token, last, SemanticTokenType::Number)
-            }
-            erl_tokenize::Token::Keyword(_) => {
-                self.prev_tokens.clear();
-                SemanticToken::new(&token, last, SemanticTokenType::Keyword)
-            }
-            erl_tokenize::Token::Char(_) | erl_tokenize::Token::String(_) => {
-                SemanticToken::new(&token, last, SemanticTokenType::String)
-            }
-            erl_tokenize::Token::Symbol(_) => {
-                self.prev_tokens.push(token);
-                return None;
-            }
-            erl_tokenize::Token::Variable(_) => {
-                SemanticToken::new(&token, last, SemanticTokenType::Variable)
-            }
-            erl_tokenize::Token::Whitespace(_) => {
-                self.prev_tokens.clear();
-                return None;
-            }
-            erl_tokenize::Token::Atom(x) => {
-                let ty = self.handle_atom(x)?;
-                SemanticToken::new(&token, last, ty)
-            }
-        };
-        self.last_start_position = token.start_position();
-        Some(semantic_token)
+    fn new() -> Self {
+        Self {
+            last_start_position: Default::default(),
+            prev_tokens: VecDeque::new(),
+        }
     }
 
-    fn handle_atom(&mut self, a: &erl_tokenize::tokens::AtomToken) -> Option<SemanticTokenType> {
-        use erl_tokenize::values::Symbol;
-        use erl_tokenize::Token;
+    fn make_semantic_token(
+        &mut self,
+        token: &impl PositionRange,
+        ty: SemanticTokenType,
+    ) -> SemanticToken {
+        let semantic_token = SemanticToken::new(token, self.last_start_position.clone(), ty);
+        self.last_start_position = token.start_position();
+        semantic_token
+    }
 
-        if self.next_atom_is_module {
-            self.next_atom_is_module = false;
-            self.prev_tokens.clear();
-            return Some(SemanticTokenType::Namespace);
-        }
-
-        let Some(Token::Symbol(s)) = self.prev_tokens.first() else {
-            return None;
-        };
-        if s.value() == Symbol::Hyphen {
-            self.prev_tokens.clear();
-            if a.value() == "module" {
-                self.next_atom_is_module = true;
+    fn handle_token(&mut self, token: erl_tokenize::Token) -> Option<SemanticToken> {
+        let result = match &token {
+            erl_tokenize::Token::Whitespace(_) => None,
+            erl_tokenize::Token::Comment(_) => {
+                Some(self.make_semantic_token(&token, SemanticTokenType::Comment))
             }
-            Some(SemanticTokenType::Keyword)
-        } else {
-            None
+            erl_tokenize::Token::Float(_) | erl_tokenize::Token::Integer(_) => {
+                Some(self.make_semantic_token(&token, SemanticTokenType::Number))
+            }
+            erl_tokenize::Token::Keyword(_) => {
+                Some(self.make_semantic_token(&token, SemanticTokenType::Keyword))
+            }
+            erl_tokenize::Token::Char(_) | erl_tokenize::Token::String(_) => {
+                Some(self.make_semantic_token(&token, SemanticTokenType::String))
+            }
+            erl_tokenize::Token::Symbol(token) => self.handle_symbol_token(token),
+            erl_tokenize::Token::Variable(token) => self.handle_variable_token(token),
+            erl_tokenize::Token::Atom(token) => self.handle_atom_token(token),
+        };
+
+        if !matches!(
+            token,
+            erl_tokenize::Token::Whitespace(_) | erl_tokenize::Token::Comment(_)
+        ) {
+            self.prev_tokens.push_back(token);
+            if self.prev_tokens.len() > 10 {
+                self.prev_tokens.pop_front();
+            }
         }
+
+        result
+    }
+
+    fn handle_symbol_token(
+        &mut self,
+        token: &erl_tokenize::tokens::SymbolToken,
+    ) -> Option<SemanticToken> {
+        if token.value() == Symbol::Slash || token.value() == Symbol::OpenParen {
+            if let Some(token) = self
+                .prev_tokens
+                .back()
+                .and_then(|t| t.as_atom_token())
+                .cloned()
+            {
+                return Some(self.make_semantic_token(&token, SemanticTokenType::Function));
+            }
+        }
+
+        if token.value() == Symbol::Colon {
+            if let Some(token) = self
+                .prev_tokens
+                .back()
+                .and_then(|t| t.as_atom_token())
+                .cloned()
+            {
+                return Some(self.make_semantic_token(&token, SemanticTokenType::Namespace));
+            }
+        }
+
+        None
+    }
+
+    fn handle_variable_token(
+        &mut self,
+        token: &erl_tokenize::tokens::VariableToken,
+    ) -> Option<SemanticToken> {
+        if self.is_symbol_eq(0, Symbol::Question) {
+            return Some(self.make_semantic_token(token, SemanticTokenType::Macro));
+        }
+
+        Some(self.make_semantic_token(token, SemanticTokenType::Variable))
+    }
+
+    fn handle_atom_token(
+        &mut self,
+        token: &erl_tokenize::tokens::AtomToken,
+    ) -> Option<SemanticToken> {
+        if self.is_symbol_eq(0, Symbol::Hyphen) {
+            return Some(self.make_semantic_token(token, SemanticTokenType::Keyword));
+        }
+
+        if self.is_symbol_eq(0, Symbol::OpenParen)
+            && (self.is_atom_eq(1, "module")
+                || self.is_atom_eq(1, "behaviour")
+                || self.is_atom_eq(1, "behavior"))
+        {
+            return Some(self.make_semantic_token(token, SemanticTokenType::Namespace));
+        }
+
+        if self.is_symbol_eq(0, Symbol::OpenParen) && self.is_atom_eq(1, "record") {
+            return Some(self.make_semantic_token(token, SemanticTokenType::Struct));
+        }
+
+        if self.is_symbol_eq(0, Symbol::Question) {
+            return Some(self.make_semantic_token(token, SemanticTokenType::Macro));
+        }
+
+        if self.is_symbol_eq(0, Symbol::Sharp) {
+            return Some(self.make_semantic_token(token, SemanticTokenType::Struct));
+        }
+
+        None
+    }
+
+    fn is_symbol_eq(&self, prev_n: usize, symbol: Symbol) -> bool {
+        self.prev_tokens
+            .iter()
+            .rev()
+            .nth(prev_n)
+            .and_then(|token| token.as_symbol_token())
+            .map_or(false, |token| token.value() == symbol)
+    }
+
+    fn is_atom_eq(&self, prev_n: usize, atom: &str) -> bool {
+        self.prev_tokens
+            .iter()
+            .rev()
+            .nth(prev_n)
+            .and_then(|token| token.as_atom_token())
+            .map_or(false, |token| token.value() == atom)
     }
 }
 
@@ -173,6 +254,9 @@ impl SemanticToken {
             SemanticTokenType::Number => 4,
             SemanticTokenType::Operator => 5,
             SemanticTokenType::Namespace => 6,
+            SemanticTokenType::Function => 7,
+            SemanticTokenType::Macro => 8,
+            SemanticTokenType::Struct => 9,
             _ => unreachable!(),
         };
         let delta_line = (token.start_position().line() - last_position.line()) as u32;
