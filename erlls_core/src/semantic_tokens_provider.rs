@@ -253,7 +253,6 @@ impl Highlighter {
                 | Symbol::LessEq
         ) {
             self.add_semantic_token(token, SemanticTokenType::Operator);
-            return;
         }
     }
 
@@ -312,7 +311,6 @@ impl Highlighter {
             })
         {
             self.add_semantic_token(token, SemanticTokenType::Property);
-            return;
         }
     }
 
