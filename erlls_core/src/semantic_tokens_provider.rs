@@ -41,7 +41,7 @@ impl SemanticTokensProvider {
     pub fn handle_full_request<FS: FileSystem>(
         &mut self,
         params: SemanticTokensParams,
-        documents: &mut DocumentRepository<FS>,
+        documents: &DocumentRepository<FS>,
     ) -> Result<ResponseMessage, ResponseError> {
         let doc = documents
             .get_from_editings(&params.text_document.uri)
@@ -58,7 +58,7 @@ impl SemanticTokensProvider {
     pub fn handle_range_request<FS: FileSystem>(
         &mut self,
         params: SemanticTokensRangeParams,
-        documents: &mut DocumentRepository<FS>,
+        documents: &DocumentRepository<FS>,
     ) -> Result<ResponseMessage, ResponseError> {
         let doc = documents
             .get_from_editings(&params.text_document.uri)

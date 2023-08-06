@@ -104,13 +104,13 @@ impl<FS: FileSystem> LanguageServer<FS> {
                 "textDocument/semanticTokens/range" => {
                     deserialize_params(msg.params).and_then(|params| {
                         self.semantic_tokens_provider
-                            .handle_range_request(params, &mut self.document_repository)
+                            .handle_range_request(params, &self.document_repository)
                     })
                 }
                 "textDocument/semanticTokens/full" => {
                     deserialize_params(msg.params).and_then(|params| {
                         self.semantic_tokens_provider
-                            .handle_full_request(params, &mut self.document_repository)
+                            .handle_full_request(params, &self.document_repository)
                     })
                 }
                 "shutdown" => Ok(ResponseMessage::default()),
