@@ -1159,7 +1159,7 @@ mod tests {
 
     #[test]
     fn find_target_works() -> orfail::Result<()> {
-        macro_rules! assert_rename_target {
+        macro_rules! assert_target {
             ($start:expr, $end:expr, $name:expr, $kind:pat, $i:expr, $tree:expr) => {
                 if ($start..=$end).contains(&$i) {
                     let target = $tree.find_target(offset($i)).or_fail()?;
@@ -1203,49 +1203,49 @@ bar() ->
         for i in 0..text.len() {
             use Target::*;
 
-            assert_rename_target!(8, 11, "foo", Module { .. }, i, tree);
-            assert_rename_target!(21, 24, "foo", Type { .. }, i, tree);
-            assert_rename_target!(30, 33, "any", Type { .. }, i, tree);
-            assert_rename_target!(43, 46, "bar", Type { .. }, i, tree);
-            assert_rename_target!(47, 48, "A", Variable { .. }, i, tree);
-            assert_rename_target!(54, 55, "A", Variable { .. }, i, tree);
-            assert_rename_target!(58, 59, "b", Module { .. }, i, tree);
-            assert_rename_target!(60, 61, "b", Type { .. }, i, tree);
-            assert_rename_target!(77, 80, "foo", Function { .. }, i, tree);
-            assert_rename_target!(81, 84, "foo", Module { .. }, i, tree);
-            assert_rename_target!(85, 88, "foo", Type { .. }, i, tree);
-            assert_rename_target!(99, 102, "foo", Function { .. }, i, tree);
-            assert_rename_target!(103, 104, "A", Variable { .. }, i, tree);
-            assert_rename_target!(113, 114, "B", Variable { .. }, i, tree);
-            assert_rename_target!(117, 118, "A", Variable { .. }, i, tree);
-            assert_rename_target!(128, 130, "io", Module { .. }, i, tree);
-            assert_rename_target!(131, 137, "format", Function { .. }, i, tree);
-            assert_rename_target!(149, 150, "B", Variable { .. }, i, tree);
-            assert_rename_target!(173, 179, "Record", Variable { .. }, i, tree);
-            assert_rename_target!(180, 191, "record_name", Record { .. }, i, tree);
-            assert_rename_target!(192, 202, "field_name", RecordField { .. }, i, tree);
-            assert_rename_target!(210, 213, "rec", Record { .. }, i, tree);
-            assert_rename_target!(214, 217, "aaa", RecordField { .. }, i, tree);
-            assert_rename_target!(235, 238, "ccc", RecordField { .. }, i, tree);
-            assert_rename_target!(246, 247, "A", Variable { .. }, i, tree);
-            assert_rename_target!(253, 254, "A", Variable { .. }, i, tree);
-            assert_rename_target!(265, 266, "M", Variable { .. }, i, tree);
-            assert_rename_target!(288, 289, "C", Variable { .. }, i, tree);
-            assert_rename_target!(327, 330, "XXX", Variable { .. }, i, tree);
-            assert_rename_target!(334, 337, "baz", Function { .. }, i, tree);
-            assert_rename_target!(338, 341, "XXX", Variable { .. }, i, tree);
-            assert_rename_target!(370, 373, "foo", Function { .. }, i, tree);
-            assert_rename_target!(393, 396, "foo", Type { .. }, i, tree);
-            assert_rename_target!(411, 414, "rec", Record { .. }, i, tree);
-            assert_rename_target!(418, 421, "aaa", RecordField { .. }, i, tree);
-            assert_rename_target!(424, 427, "bbb", Function { .. }, i, tree);
-            assert_rename_target!(433, 436, "foo", Type { .. }, i, tree);
-            assert_rename_target!(452, 455, "FOO", Macro { .. }, i, tree);
-            assert_rename_target!(474, 477, "BAR", Macro { .. }, i, tree);
-            assert_rename_target!(489, 492, "bar", Function { .. }, i, tree);
-            assert_rename_target!(503, 506, "FOO", Macro { .. }, i, tree);
-            assert_rename_target!(510, 513, "BAR", Macro { .. }, i, tree);
-            assert_rename_target!(514, 517, "bbb", Function { .. }, i, tree);
+            assert_target!(8, 11, "foo", Module { .. }, i, tree);
+            assert_target!(21, 24, "foo", Type { .. }, i, tree);
+            assert_target!(30, 33, "any", Type { .. }, i, tree);
+            assert_target!(43, 46, "bar", Type { .. }, i, tree);
+            assert_target!(47, 48, "A", Variable { .. }, i, tree);
+            assert_target!(54, 55, "A", Variable { .. }, i, tree);
+            assert_target!(58, 59, "b", Module { .. }, i, tree);
+            assert_target!(60, 61, "b", Type { .. }, i, tree);
+            assert_target!(77, 80, "foo", Function { .. }, i, tree);
+            assert_target!(81, 84, "foo", Module { .. }, i, tree);
+            assert_target!(85, 88, "foo", Type { .. }, i, tree);
+            assert_target!(99, 102, "foo", Function { .. }, i, tree);
+            assert_target!(103, 104, "A", Variable { .. }, i, tree);
+            assert_target!(113, 114, "B", Variable { .. }, i, tree);
+            assert_target!(117, 118, "A", Variable { .. }, i, tree);
+            assert_target!(128, 130, "io", Module { .. }, i, tree);
+            assert_target!(131, 137, "format", Function { .. }, i, tree);
+            assert_target!(149, 150, "B", Variable { .. }, i, tree);
+            assert_target!(173, 179, "Record", Variable { .. }, i, tree);
+            assert_target!(180, 191, "record_name", Record { .. }, i, tree);
+            assert_target!(192, 202, "field_name", RecordField { .. }, i, tree);
+            assert_target!(210, 213, "rec", Record { .. }, i, tree);
+            assert_target!(214, 217, "aaa", RecordField { .. }, i, tree);
+            assert_target!(235, 238, "ccc", RecordField { .. }, i, tree);
+            assert_target!(246, 247, "A", Variable { .. }, i, tree);
+            assert_target!(253, 254, "A", Variable { .. }, i, tree);
+            assert_target!(265, 266, "M", Variable { .. }, i, tree);
+            assert_target!(288, 289, "C", Variable { .. }, i, tree);
+            assert_target!(327, 330, "XXX", Variable { .. }, i, tree);
+            assert_target!(334, 337, "baz", Function { .. }, i, tree);
+            assert_target!(338, 341, "XXX", Variable { .. }, i, tree);
+            assert_target!(370, 375, "foo", Function { .. }, i, tree);
+            assert_target!(393, 398, "foo", Type { .. }, i, tree);
+            assert_target!(411, 414, "rec", Record { .. }, i, tree);
+            assert_target!(418, 421, "aaa", RecordField { .. }, i, tree);
+            assert_target!(424, 427, "bbb", Function { .. }, i, tree);
+            assert_target!(433, 436, "foo", Type { .. }, i, tree);
+            assert_target!(452, 455, "FOO", Macro { .. }, i, tree);
+            assert_target!(474, 477, "BAR", Macro { .. }, i, tree);
+            assert_target!(489, 492, "bar", Function { .. }, i, tree);
+            assert_target!(503, 506, "FOO", Macro { .. }, i, tree);
+            assert_target!(510, 513, "BAR", Macro { .. }, i, tree);
+            assert_target!(514, 517, "bbb", Function { .. }, i, tree);
 
             assert_eq!(None, tree.find_target(offset(i)));
         }
