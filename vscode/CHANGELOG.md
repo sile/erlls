@@ -6,6 +6,13 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.5] - 2023-08-06
+
+### Added
+
+- Add semantic highlighting support
+- Make it possible to go to the definition when the cursor is on the `/Arity` part
+
 ## [0.0.4] - 2023-08-02
 
 ### Added
