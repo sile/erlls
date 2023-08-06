@@ -6,6 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.10] - 2023-08-07
+
+### Fixed
+
+- Fix a bug that the first finding of a module that outside the workspace will fail.
+
 ## [0.0.9] - 2023-08-06
 
 ### Added
