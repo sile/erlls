@@ -130,6 +130,7 @@ impl<FS: FileSystem> DocumentRepository<FS> {
                     let uri = DocumentUri::from_path(&self.config.root_dir, path).or_fail()?;
                     self.module_uri_cache
                         .insert(module_name.to_string(), uri.clone());
+                    return Ok(uri);
                 }
             }
         }
