@@ -26,7 +26,6 @@ impl SemanticTokensProvider {
                     "keyword",
                     "variable",
                     "number",
-                    "operator",
                     "namespace",
                     "function",
                     "macro",
@@ -252,11 +251,10 @@ impl SemanticToken {
             SemanticTokenType::Keyword => 2,
             SemanticTokenType::Variable => 3,
             SemanticTokenType::Number => 4,
-            SemanticTokenType::Operator => 5,
-            SemanticTokenType::Namespace => 6,
-            SemanticTokenType::Function => 7,
-            SemanticTokenType::Macro => 8,
-            SemanticTokenType::Struct => 9,
+            SemanticTokenType::Namespace => 5,
+            SemanticTokenType::Function => 6,
+            SemanticTokenType::Macro => 7,
+            SemanticTokenType::Struct => 8,
             _ => unreachable!(),
         };
         let delta_line = (token.start_position().line() - last_position.line()) as u32;
