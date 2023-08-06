@@ -6,11 +6,16 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
-## [0.0.8] - 2023-08-06
+## [0.0.9] - 2023-08-06
 
 ### Added
 
 - Add minimal indentation rules
+
+## [0.0.8] - 2023-08-06
+
+### Added
+
 - Add `language-configuration.json` file to make the editor recognize comments and brackets
 
 ## [0.0.7] - 2023-08-06
