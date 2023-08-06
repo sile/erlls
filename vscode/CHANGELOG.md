@@ -6,6 +6,16 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.7] - 2023-08-06
+
+### Changed
+
+- Tweak semantic highlighting rules
+
+### Added
+
+- Recognize .hrl files as Erlang files
+
 ## [0.0.6] - 2023-08-06
 
 ### Fixed

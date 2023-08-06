@@ -31,7 +31,8 @@
           "Erlang"
         ],
         "extensions": [
-          ".erl"
+          ".erl",
+          ".hrl"
         ],
         "filenames": [
           "rebar.config"

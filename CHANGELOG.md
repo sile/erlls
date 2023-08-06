@@ -6,6 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.7] - 2023-08-06
+
+### Changed
+
+- Tweak semantic highlighting rules
+
 ## [0.0.5] - 2023-08-06
 
 ### Added
