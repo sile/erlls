@@ -10,6 +10,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Added
 
+- Add minimal indentation rules
 - Add `language-configuration.json` file to make the editor recognize comments and brackets
 
 ## [0.0.7] - 2023-08-06
