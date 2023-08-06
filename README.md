@@ -43,9 +43,6 @@ Please install [erlls extension](https://marketplace.visualstudio.com/items?item
 
 There is no need to install the `erlls` binary using the `$ cargo install` command as the extension already includes the WebAssembly build.
 
-Note that the extension doesn't offer some basic features such as syntax highlighting, 
-so it's recommended to use it in conjunction with other Erlang extensions.
-
 ### Emacs ([lsp-mode](https://github.com/emacs-lsp/lsp-mode))
 
 1. Install `erlls` command.
