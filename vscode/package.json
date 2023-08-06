@@ -36,7 +36,8 @@
         ],
         "filenames": [
           "rebar.config"
-        ]
+        ],
+        "configuration": "./language-configuration.json"
       }
     ],
     "configuration": {
