@@ -26,7 +26,7 @@ impl SemanticTokensProvider {
                     "keyword",
                     "variable",
                     "number",
-                    "namespace",
+                    "class",
                     "function",
                     "macro",
                     "struct"
@@ -162,7 +162,7 @@ impl Highlighter {
                 .and_then(|t| t.as_atom_token())
                 .cloned()
             {
-                return Some(self.make_semantic_token(&token, SemanticTokenType::Namespace));
+                return Some(self.make_semantic_token(&token, SemanticTokenType::Class));
             }
         }
 
@@ -177,6 +177,10 @@ impl Highlighter {
             return Some(self.make_semantic_token(token, SemanticTokenType::Macro));
         }
 
+        if self.is_symbol_eq(0, Symbol::OpenParen) && self.is_atom_eq(1, "define") {
+            return Some(self.make_semantic_token(token, SemanticTokenType::Macro));
+        }
+
         Some(self.make_semantic_token(token, SemanticTokenType::Variable))
     }
 
@@ -184,7 +188,7 @@ impl Highlighter {
         &mut self,
         token: &erl_tokenize::tokens::AtomToken,
     ) -> Option<SemanticToken> {
-        if self.is_symbol_eq(0, Symbol::Hyphen) {
+        if self.is_symbol_eq(0, Symbol::Hyphen) || self.is_symbol_eq(0, Symbol::Slash) {
             return Some(self.make_semantic_token(token, SemanticTokenType::Keyword));
         }
 
@@ -193,11 +197,15 @@ impl Highlighter {
                 || self.is_atom_eq(1, "behaviour")
                 || self.is_atom_eq(1, "behavior"))
         {
-            return Some(self.make_semantic_token(token, SemanticTokenType::Namespace));
+            return Some(self.make_semantic_token(token, SemanticTokenType::Class));
         }
 
         if self.is_symbol_eq(0, Symbol::OpenParen) && self.is_atom_eq(1, "record") {
             return Some(self.make_semantic_token(token, SemanticTokenType::Struct));
+        }
+
+        if self.is_symbol_eq(0, Symbol::OpenParen) && self.is_atom_eq(1, "define") {
+            return Some(self.make_semantic_token(token, SemanticTokenType::Macro));
         }
 
         if self.is_symbol_eq(0, Symbol::Question) {
@@ -251,7 +259,7 @@ impl SemanticToken {
             SemanticTokenType::Keyword => 2,
             SemanticTokenType::Variable => 3,
             SemanticTokenType::Number => 4,
-            SemanticTokenType::Namespace => 5,
+            SemanticTokenType::Class => 5,
             SemanticTokenType::Function => 6,
             SemanticTokenType::Macro => 7,
             SemanticTokenType::Struct => 8,
