@@ -45,10 +45,16 @@ impl PushDiagnosticsProvider {
             version: doc.version,
         };
         if let Err(e) = efmt_core::format_text::<ModuleOrConfig>(&text) {
+            let message = match e {
+                efmt_core::parse::Error::UnexpectedEof { .. } => "parse failed: unexpected eof",
+                efmt_core::parse::Error::UnexpectedToken { .. } => "parse failed: unexpected token",
+                efmt_core::parse::Error::TokenizeError { .. } => "parse failed: tokenize error",
+            };
             let diagnostic = Diagnostic {
                 range: Range::from_parse_error(&e),
-                message: e.to_string(),
+                message: message.to_owned(),
                 severity: Some(DiagnosticSeverity::ERROR),
+                source: "efmt".to_owned(),
             };
             diagnostics.diagnostics.push(diagnostic);
         }

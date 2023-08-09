@@ -546,6 +546,8 @@ pub struct Diagnostic {
     pub severity: Option<DiagnosticSeverity>,
 
     pub message: String,
+
+    pub source: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
