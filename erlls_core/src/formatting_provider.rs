@@ -22,23 +22,6 @@ impl FormattingProvider {
         let text = doc.text.to_string();
         let new_text = match efmt_core::format_text::<efmt_core::items::ModuleOrConfig>(&text) {
             Err(_e) => {
-                // TODO: suppport diagnostics
-                // // TODO: check client capabilities (e.g., "publishDiagnostics":{"relatedInformation":true,"tagSupport":{"valueSet":[1,2]},"versionSupport":true})
-                // let diagnostic = Diagnostic {
-                //     range: Range::from_parse_error(&e),
-                //     message: e.to_string(),
-                //     severity: Some(DiagnosticSeverity::ERROR),
-                // };
-                // let params = PublishDiagnosticsParams {
-                //     uri: params.text_document.uri.clone(),
-                //     diagnostics: vec![diagnostic],
-                //     version: doc.version,
-                // };
-                // let notification =
-                //     NotificationMessage::new("textDocument/publishDiagnostics", params)
-                //         .or_fail()?;
-                // self.outgoing_messages
-                //     .push(serde_json::to_vec(&notification).or_fail()?);
                 return Err(ResponseError::request_failed().message("Failed to format"));
             }
             Ok(new_text) => new_text,

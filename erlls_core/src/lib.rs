@@ -7,6 +7,7 @@ pub mod formatting_provider;
 pub mod fs;
 pub mod header;
 pub mod message;
+pub mod push_diagnostics_provider;
 pub mod semantic_tokens_provider;
 pub mod server;
 pub mod syntax_tree;

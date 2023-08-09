@@ -10,6 +10,7 @@ use crate::{
         InitializeParams, InitializeResult, Message, NotificationMessage, RequestMessage,
         ResponseMessage,
     },
+    push_diagnostics_provider::PushDiagnosticsProvider,
     semantic_tokens_provider::SemanticTokensProvider,
 };
 use orfail::OrFail;
@@ -25,6 +26,7 @@ pub struct LanguageServer<FS> {
     formatting_provider: FormattingProvider,
     completion_provider: CompletionProvider,
     semantic_tokens_provider: SemanticTokensProvider,
+    push_diagnostics_provider: PushDiagnosticsProvider,
 }
 
 impl<FS: FileSystem> LanguageServer<FS> {
@@ -38,6 +40,7 @@ impl<FS: FileSystem> LanguageServer<FS> {
             formatting_provider: FormattingProvider,
             completion_provider: CompletionProvider,
             semantic_tokens_provider: SemanticTokensProvider,
+            push_diagnostics_provider: PushDiagnosticsProvider,
         }
     }
 
@@ -132,6 +135,19 @@ impl<FS: FileSystem> LanguageServer<FS> {
         };
         if let Err(e) = self.document_repository.handle_notification(&msg).or_fail() {
             log::warn!("Failed to handle {:?} notification: reason={e}", msg.method);
+        }
+        match self
+            .push_diagnostics_provider
+            .handle_notification(&msg, &self.document_repository)
+            .or_fail()
+        {
+            Err(e) => {
+                log::warn!("Failed to handle {:?} notification: reason={e}", msg.method);
+            }
+            Ok(Some(msg)) => {
+                self.push_outgoing_message(msg);
+            }
+            Ok(None) => {}
         }
     }
 

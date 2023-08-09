@@ -455,17 +455,17 @@ impl Range {
         // TODO: Consider UTF-16
         let (start, end) = match e {
             efmt_core::parse::Error::UnexpectedEof { position, .. } => (
-                Position::new(position.line() - 1, 0),
+                Position::new(position.line() - 1, position.column() - 1),
                 Position::new(position.line() - 1, position.column()),
             ),
             efmt_core::parse::Error::UnexpectedToken { position, .. } => (
-                Position::new(position.line() - 1, 0),
+                Position::new(position.line() - 1, position.column() - 1),
                 Position::new(position.line() - 1, position.column()),
             ),
             efmt_core::parse::Error::TokenizeError { source, .. } => {
                 let position = source.position();
                 (
-                    Position::new(position.line() - 1, 0),
+                    Position::new(position.line() - 1, position.column() - 1),
                     Position::new(position.line() - 1, position.column()),
                 )
             }
