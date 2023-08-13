@@ -88,7 +88,7 @@ async function initializeWasm() {
             return;
         }
 
-        const config = { "erlLibs": [libDir, "_build/default/lib"] };
+        const config = { "erlLibs": [libDir, "_checkouts", "_build/default/lib"] };
         const configJsonBytes = new TextEncoder().encode(JSON.stringify(config));
         const wasmConfigPtr =
             (wasmInstance.exports.allocateVec as CallableFunction)(configJsonBytes.length);

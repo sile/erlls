@@ -84,6 +84,7 @@ fn create_config() -> Config {
         config
             .erl_libs
             .extend(kernel_lib_dir.parent().into_iter().map(|p| p.to_owned()));
+        config.erl_libs.push(PathBuf::from("_checkouts/"));
         config.erl_libs.push(PathBuf::from("_build/default/lib"));
     }
     config

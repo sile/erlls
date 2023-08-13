@@ -6,6 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.12] - 2023-08-11
+
+### Fixed
+
+- Add "_checkouts/" to lib directry list
+
 ## [0.0.11] - 2023-08-09
 
 ### Added
