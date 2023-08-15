@@ -6,6 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.13] - 2023-08-15
+
+### Fixed
+
+- Fix a bug that tag jumps to dependencies are failed if there is no `_checkouts/` directory
+
 ## [0.0.12] - 2023-08-11
 
 ### Fixed

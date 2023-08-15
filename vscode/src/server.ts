@@ -58,10 +58,16 @@ async function initializeWasm() {
                 }
                 const parentDir = new TextDecoder('utf-8').decode(
                     new Uint8Array(wasmMemory.buffer, pathOffset, pathLen));
-                const subDirs = fs.readdirSync(parentDir, { withFileTypes: true })
-                    .filter(dirent => dirent.isDirectory())
-                    .map(dirent => path.join(parentDir, dirent.name));
-                const subDirsJson = JSON.stringify(subDirs);
+                let subDirsJson;
+                try {
+                    const subDirs = fs.readdirSync(parentDir, { withFileTypes: true })
+                        .filter(dirent => dirent.isDirectory())
+                        .map(dirent => path.join(parentDir, dirent.name));
+                    subDirsJson = JSON.stringify(subDirs);
+                } catch (e) {
+                    connection.console.log(`Failed to read subdirs of ${parentDir}: ${e}`);
+                    return 0;
+                }
 
                 const data = new TextEncoder().encode(subDirsJson);
                 const wasmDataPtr = (wasmInstance.exports.allocateVec as CallableFunction)(data.length);
