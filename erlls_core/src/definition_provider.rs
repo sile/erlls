@@ -106,7 +106,7 @@ impl DefinitionProvider {
                 }
             }
 
-            Err(orfail::Failure::new().message("No definitions found"))
+            Err(orfail::Failure::new("No definitions found"))
         }
     }
 }

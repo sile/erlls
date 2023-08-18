@@ -82,10 +82,8 @@ impl From<serde_json::Error> for ResponseError {
 impl From<Failure> for ResponseError {
     fn from(value: Failure) -> Self {
         ResponseError {
-            code: value
-                .code
-                .map_or(ErrorCode::INVALID_PARAMS, |c| ErrorCode(c as i32)),
-            message: value.message,
+            code: ErrorCode::INVALID_PARAMS,
+            message: Some(value.message),
             data: serde_json::to_value(&value.backtrace).ok(),
         }
     }

@@ -38,7 +38,7 @@ impl Header {
             }
         }
         if this.content_length == usize::MAX {
-            return Err(Failure::new().message("Missing Content-Length header"));
+            return Err(Failure::new("Missing Content-Length header"));
         }
         Ok(this)
     }

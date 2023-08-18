@@ -40,7 +40,7 @@ impl erlls_core::fs::FileSystem for FileSystem {
         let vec = unsafe {
             let vec_ptr = fsReadFile(path.as_ptr(), path.len() as u32);
             if vec_ptr.is_null() {
-                return Err(orfail::Failure::new().message("Failed to read file"));
+                return Err(orfail::Failure::new("Failed to read file"));
             }
             *Box::from_raw(vec_ptr)
         };
@@ -56,7 +56,7 @@ impl erlls_core::fs::FileSystem for FileSystem {
         let vec = unsafe {
             let vec_ptr = fsReadSubDirs(path.as_ptr(), path.len() as u32);
             if vec_ptr.is_null() {
-                return Err(orfail::Failure::new().message("Failed to read directory"));
+                return Err(orfail::Failure::new("Failed to read directory"));
             }
             *Box::from_raw(vec_ptr)
         };

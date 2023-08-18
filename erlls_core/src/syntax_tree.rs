@@ -114,7 +114,7 @@ impl SyntaxTree {
             }
         }
 
-        Err(orfail::Failure::new().message("failed to parse"))
+        Err(orfail::Failure::new("failed to parse"))
     }
 
     pub fn parse_partial_funcall(

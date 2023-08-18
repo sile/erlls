@@ -50,8 +50,7 @@ impl erlls_core::fs::FileSystem for FileSystem {
     }
 
     fn read_file<P: AsRef<Path>>(path: P) -> orfail::Result<String> {
-        std::fs::read_to_string(&path)
-            .map_err(|e| orfail::Failure::new().message(format!("{e}:{}", path.as_ref().display())))
+        std::fs::read_to_string(&path).or_fail_with(|e| format!("{e}: {}", path.as_ref().display()))
     }
 
     fn read_sub_dirs<P: AsRef<Path>>(path: P) -> orfail::Result<Vec<PathBuf>> {

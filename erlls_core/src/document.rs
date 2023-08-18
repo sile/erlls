@@ -135,7 +135,9 @@ impl<FS: FileSystem> DocumentRepository<FS> {
             }
         }
 
-        Err(orfail::Failure::new().message(format!("Module not found: {module_name:?}")))
+        Err(orfail::Failure::new(format!(
+            "Module not found: {module_name:?}"
+        )))
     }
 
     pub fn handle_notification(&mut self, msg: &NotificationMessage) -> orfail::Result<()> {
@@ -300,12 +302,11 @@ impl Text {
         for (i, c) in self
             .lines
             .get(position.line)
-            .or_fail()
-            .map_err(|f| {
-                f.message(format!(
+            .or_fail_with(|()| {
+                format!(
                     "position={position:?}, text_range_end={:?}",
                     self.range().end
-                ))
+                )
             })?
             .chars()
             .enumerate()
