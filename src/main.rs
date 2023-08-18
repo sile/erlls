@@ -1,6 +1,7 @@
 use erlls_core::{config::Config, header::Header, server::LanguageServer};
 use orfail::OrFail;
 use std::{
+    future::Future,
     io::{BufRead, Write},
     path::{Path, PathBuf},
 };
@@ -19,7 +20,9 @@ fn main() -> orfail::Result<()> {
         read_message(&mut stdin, &mut buf).or_fail()?;
         log::debug!("Received JSON: {}", std::str::from_utf8(&buf).or_fail()?);
 
-        server.handle_incoming_message(&buf);
+        let future = server.handle_incoming_message(&buf);
+        futures::executor::block_on(future);
+
         while let Some(msg) = server.take_outgoing_message() {
             write_message(&mut stdout, &msg).or_fail()?;
         }
@@ -45,23 +48,32 @@ fn write_message<W: Write>(writer: &mut W, msg: &[u8]) -> orfail::Result<()> {
 struct FileSystem;
 
 impl erlls_core::fs::FileSystem for FileSystem {
-    fn exists<P: AsRef<Path>>(path: P) -> bool {
-        path.as_ref().exists()
+    fn exists<P: AsRef<Path>>(path: P) -> Box<dyn Unpin + Future<Output = bool>> {
+        Box::new(std::future::ready(path.as_ref().exists()))
     }
 
-    fn read_file<P: AsRef<Path>>(path: P) -> orfail::Result<String> {
-        std::fs::read_to_string(&path).or_fail_with(|e| format!("{e}: {}", path.as_ref().display()))
+    fn read_file<P: AsRef<Path>>(
+        path: P,
+    ) -> Box<dyn Unpin + Future<Output = orfail::Result<String>>> {
+        let result = std::fs::read_to_string(&path)
+            .or_fail_with(|e| format!("{e}: {}", path.as_ref().display()));
+        Box::new(std::future::ready(result))
     }
 
-    fn read_sub_dirs<P: AsRef<Path>>(path: P) -> orfail::Result<Vec<PathBuf>> {
-        let mut dirs = Vec::new();
-        for entry in std::fs::read_dir(path).or_fail()? {
-            let entry = entry.or_fail()?;
-            if entry.file_type().or_fail()?.is_dir() {
-                dirs.push(entry.path());
+    fn read_sub_dirs<P: AsRef<Path>>(
+        path: P,
+    ) -> Box<dyn Unpin + Future<Output = orfail::Result<Vec<PathBuf>>>> {
+        let f = || {
+            let mut dirs = Vec::new();
+            for entry in std::fs::read_dir(path).or_fail()? {
+                let entry = entry.or_fail()?;
+                if entry.file_type().or_fail()?.is_dir() {
+                    dirs.push(entry.path());
+                }
             }
-        }
-        Ok(dirs)
+            Ok(dirs)
+        };
+        Box::new(std::future::ready(f()))
     }
 }
 
