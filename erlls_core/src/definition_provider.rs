@@ -76,7 +76,7 @@ impl DefinitionProvider {
     async fn find_definition<FS: FileSystem>(
         target: &Target,
         target_uri: DocumentUri, // TODO: rename
-        documents: &DocumentRepository<FS>,
+        documents: &mut DocumentRepository<FS>,
         strict: bool,
     ) -> orfail::Result<Location> {
         let mut visited: HashSet<DocumentUri> = HashSet::new();

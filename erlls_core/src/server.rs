@@ -30,12 +30,12 @@ pub struct LanguageServer<FS> {
 }
 
 impl<FS: FileSystem> LanguageServer<FS> {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config, fs: FS) -> Self {
         Self {
             initialized: false,
             config,
             outgoing_messages: Vec::new(),
-            document_repository: DocumentRepository::default(),
+            document_repository: DocumentRepository::new(fs),
             definition_provider: DefinitionProvider,
             formatting_provider: FormattingProvider,
             completion_provider: CompletionProvider,

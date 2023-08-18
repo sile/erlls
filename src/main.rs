@@ -10,7 +10,7 @@ fn main() -> orfail::Result<()> {
     env_logger::init();
 
     let config = create_config();
-    let mut server = LanguageServer::<FileSystem>::new(config);
+    let mut server = LanguageServer::<FileSystem>::new(config, FileSystem);
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
     let mut stdin = stdin.lock();
@@ -48,11 +48,12 @@ fn write_message<W: Write>(writer: &mut W, msg: &[u8]) -> orfail::Result<()> {
 struct FileSystem;
 
 impl erlls_core::fs::FileSystem for FileSystem {
-    fn exists<P: AsRef<Path>>(path: P) -> Box<dyn Unpin + Future<Output = bool>> {
+    fn exists<P: AsRef<Path>>(&mut self, path: P) -> Box<dyn Unpin + Future<Output = bool>> {
         Box::new(std::future::ready(path.as_ref().exists()))
     }
 
     fn read_file<P: AsRef<Path>>(
+        &mut self,
         path: P,
     ) -> Box<dyn Unpin + Future<Output = orfail::Result<String>>> {
         let result = std::fs::read_to_string(&path)
@@ -61,6 +62,7 @@ impl erlls_core::fs::FileSystem for FileSystem {
     }
 
     fn read_sub_dirs<P: AsRef<Path>>(
+        &mut self,
         path: P,
     ) -> Box<dyn Unpin + Future<Output = orfail::Result<Vec<PathBuf>>>> {
         let f = || {
