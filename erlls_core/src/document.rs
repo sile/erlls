@@ -28,6 +28,10 @@ impl<FS: FileSystem> DocumentRepository<FS> {
         }
     }
 
+    pub fn fs_mut(&mut self) -> &mut FS {
+        &mut self.fs
+    }
+
     pub fn update_config(&mut self, config: Config) {
         self.config = config;
     }

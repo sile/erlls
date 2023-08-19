@@ -44,6 +44,10 @@ impl<FS: FileSystem> LanguageServer<FS> {
         }
     }
 
+    pub fn fs_mut(&mut self) -> &mut FS {
+        self.document_repository.fs_mut()
+    }
+
     pub fn config(&self) -> &Config {
         &self.config
     }

@@ -108,6 +108,7 @@ name = "erlls_wasm"
 version = "0.0.4"
 dependencies = [
  "erlls_core",
+ "futures",
  "orfail",
  "serde",
  "serde_json",
