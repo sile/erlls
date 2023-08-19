@@ -109,7 +109,11 @@ self.onmessage = async (msg: Message) => {
         port.postMessage({ type: 'fsReadSubDirs.call', promiseId, path });
     }
 
+    // TODO
+    const memory = new WebAssembly.Memory({ initial: 100, maximum: 2000 });
+
     const importOjbect = {
+        js: { mem: memory },
         env: {
             consoleLog,
             fsExistsAsync,
@@ -139,18 +143,22 @@ self.onmessage = async (msg: Message) => {
         if (!wasmExports || !wasmMemory) {
             throw new Error("unreachable");
         }
+        connection.console.log("handleIncomingMessage: " + JSON.stringify(message));
         const messageJsonBytes = new TextEncoder().encode(JSON.stringify(message));
 
         const wasmMessagePtr =
             (wasmExports.allocateVec as CallableFunction)(messageJsonBytes.length);
         const wasmMessageOffset =
             (wasmExports.vecOffset as CallableFunction)(wasmMessagePtr);
+        connection.console.log("handleIncomingMessage(0)");
         new Uint8Array(wasmMemory.buffer, wasmMessageOffset, messageJsonBytes.length).set(messageJsonBytes);
         (wasmExports.handleIncomingMessage as CallableFunction)(poolPtr, serverPtr, wasmMessagePtr);
+        connection.console.log("handleIncomingMessage(1)");
         return new Promise((resolve, _reject) => waitOutgoingMessage(resolve));
     }
 
     async function waitOutgoingMessage(resolve: (result: any[] | object | undefined) => void) {
+        connection.console.log("handleIncomingMessage(2)");
         if (!wasmExports || !wasmMemory) {
             throw new Error("Unreachable");
         }
@@ -161,6 +169,7 @@ self.onmessage = async (msg: Message) => {
             return;
         }
 
+        connection.console.log("waitOutgoingMessage: ready");
         let resultParams: any[] | object | undefined = undefined;
         while (true) {
             const wasmOutgoingMessagePtr =
@@ -187,7 +196,7 @@ self.onmessage = async (msg: Message) => {
             }
         }
 
-        connection.console.log("waitOutgoingMessage: " + JSON.stringify(resultParams));
+        connection.console.log("waitOutgoingMessage(2): " + JSON.stringify(resultParams));
         resolve(resultParams);
     }
 

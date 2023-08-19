@@ -13,12 +13,29 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 async function createWorkerLanguageClient(context: vscode.ExtensionContext, clientOptions: LanguageClientOptions): Promise<LanguageClient> {
-    const serverMain = vscode.Uri.joinPath(context.extensionUri, 'dist/web/server.js');
-    const worker = new Worker(serverMain.toString(true));
 
     const channel = new MessageChannel();
     const wasmUri = vscode.Uri.joinPath(context.extensionUri, 'dist/web/erlls.wasm');
-    const wasmBytes = await (await fetch(wasmUri.toString(true))).arrayBuffer();
+    const wasmBytes = await (await fetch(wasmUri.toString(true),
+        // TODO: remove(?)
+        { mode: "cors" }
+    )).arrayBuffer();
+    console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+
+    const serverMain = vscode.Uri.joinPath(context.extensionUri, 'dist/web/server.js');
+
+    const serverCode = new TextDecoder().decode(await vscode.workspace.fs.readFile(serverMain));
+    console.log(serverCode.slice(0, 100));
+    const webWorkerScriptObjectUrl = URL.createObjectURL(
+        new Blob([serverCode], { type: 'application/javascript' }),
+    );
+    const worker = new Worker(webWorkerScriptObjectUrl);
+
+    // const worker = new Worker(serverMain.toString(true),
+    //     // TODO: remove
+    //     { credentials: 'omit' });
+    console.log("@--------@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+
     worker.postMessage(
         { 'type': 'initialize', wasmBytes, 'port': channel.port2 },
         [wasmBytes, channel.port2]
@@ -27,7 +44,7 @@ async function createWorkerLanguageClient(context: vscode.ExtensionContext, clie
     const port = channel.port1;
     return new Promise((resolve, _reject) => {
         port.onmessage = (msg: PortMessage) => {
-            console.log("here");
+            console.log('port.onmessage: ' + JSON.stringify(msg.data));
             switch (msg.data.type) {
                 case 'initialized':
                     resolve(new LanguageClient('erllsweb', 'ErlLS Web', clientOptions, worker));

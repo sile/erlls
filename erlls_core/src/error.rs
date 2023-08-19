@@ -69,8 +69,7 @@ impl From<serde_json::Error> for ResponseError {
         let line = value.line();
         let column = value.column();
         let category = value.classify();
-        let error = Self::try_from(value)
-            .unwrap_or_else(|e| Self::invalid_params().message(&e.to_string()));
+        let error = Self::invalid_params().message(&value.to_string());
         error.data(serde_json::json!({
             "line": line,
             "column": column,

@@ -288,9 +288,21 @@ pub fn handleIncomingMessage(
         let pool = &mut *pool;
         let server = &mut *server;
         let message = *Box::from_raw(message_ptr);
+        println("[BEFORE] handleIncomingMessage");
+        match String::from_utf8(message.clone()) {
+            Ok(m) => {
+                println(
+                    &serde_json::from_str::<serde_json::Value>(&m)
+                        .is_ok()
+                        .to_string(),
+                );
+            }
+            Err(e) => println(&e.to_string()),
+        }
         pool.spawner()
             .spawn_local(server.handle_incoming_message(message))
             .expect("unreachable");
+        println("[AFTER] handleIncomingMessage");
     }
 }
 
