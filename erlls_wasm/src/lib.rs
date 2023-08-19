@@ -8,8 +8,8 @@ use std::{
     collections::HashMap,
     future::{self, Future},
     path::{Path, PathBuf},
-    sync::mpsc,
-    task::Poll,
+    sync::mpsc::{self, TryRecvError},
+    task::{Poll, Waker},
 };
 
 extern "C" {
@@ -23,18 +23,34 @@ struct ConfigDelta {
     pub erl_libs: Option<Vec<PathBuf>>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct FileSystem {
     promise_id: u32,
     exists_promises: HashMap<u32, mpsc::Sender<bool>>,
     read_file_promises: HashMap<u32, mpsc::Sender<Option<Vec<u8>>>>,
     read_sub_dirs_promises: HashMap<u32, mpsc::Sender<Option<Vec<u8>>>>,
+    waker_tx: mpsc::Sender<Waker>,
+    waker_rx: mpsc::Receiver<Waker>,
 }
 
 impl FileSystem {
     fn next_promise_id(&mut self) -> u32 {
         self.promise_id += 1;
         self.promise_id
+    }
+}
+
+impl Default for FileSystem {
+    fn default() -> Self {
+        let (waker_tx, waker_rx) = mpsc::channel();
+        Self {
+            waker_tx,
+            waker_rx,
+            promise_id: 0,
+            exists_promises: HashMap::new(),
+            read_file_promises: HashMap::new(),
+            read_sub_dirs_promises: HashMap::new(),
+        }
     }
 }
 
@@ -59,6 +75,7 @@ pub fn notifyFsReadFileAsyncResult(
     promise_id: u32,
     vec_ptr: *mut Vec<u8>,
 ) {
+    println("@@@ notifyFsReadFileAsyncResult");
     let vec = unsafe { (!vec_ptr.is_null()).then(|| *Box::from_raw(vec_ptr)) };
     let server = unsafe { &mut *server };
     let _ = server
@@ -67,6 +84,11 @@ pub fn notifyFsReadFileAsyncResult(
         .remove(&promise_id)
         .expect("unreachable")
         .send(vec);
+    let _ = server
+        .fs_mut()
+        .waker_rx
+        .try_recv()
+        .map(|waker| waker.wake());
 }
 
 #[no_mangle]
@@ -121,12 +143,21 @@ impl erlls_core::fs::FileSystem for FileSystem {
             Ok(path) => {
                 let promise_id = self.next_promise_id();
                 let (tx, rx) = mpsc::channel();
+                let waker_tx = self.waker_tx.clone();
                 self.read_file_promises.insert(promise_id, tx);
                 unsafe { fsReadFileAsync(promise_id, path.as_ptr(), path.len() as u32) };
-                Box::new(future::poll_fn(move |_ctx| match rx.try_recv() {
-                    Err(_) => Poll::Pending,
-                    Ok(None) => Poll::Ready(Err(orfail::Failure::new("Failed to read file"))),
-                    Ok(Some(vec)) => Poll::Ready(String::from_utf8(vec).or_fail()),
+                Box::new(future::poll_fn(move |ctx| {
+                    println("@@@ polled");
+                    match rx.try_recv() {
+                        Err(TryRecvError::Empty) => {
+                            let _ = waker_tx.send(ctx.waker().clone());
+                            Poll::Pending
+                        }
+                        Err(TryRecvError::Disconnected) | Ok(None) => {
+                            Poll::Ready(Err(orfail::Failure::new("Failed to read file")))
+                        }
+                        Ok(Some(vec)) => Poll::Ready(String::from_utf8(vec).or_fail()),
+                    }
                 }))
             }
         }
@@ -148,8 +179,10 @@ impl erlls_core::fs::FileSystem for FileSystem {
                 self.read_sub_dirs_promises.insert(promise_id, tx);
                 unsafe { fsReadSubDirsAsync(promise_id, path.as_ptr(), path.len() as u32) };
                 Box::new(future::poll_fn(move |_ctx| match rx.try_recv() {
-                    Err(_) => Poll::Pending,
-                    Ok(None) => Poll::Ready(Err(orfail::Failure::new("Failed to read directory"))),
+                    Err(TryRecvError::Empty) => Poll::Pending,
+                    Err(TryRecvError::Disconnected) | Ok(None) => {
+                        Poll::Ready(Err(orfail::Failure::new("Failed to read directory")))
+                    }
                     Ok(Some(vec)) => Poll::Ready(serde_json::from_slice(&vec).or_fail()),
                 }))
             }

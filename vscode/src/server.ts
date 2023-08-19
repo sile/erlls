@@ -49,22 +49,33 @@ async function initializeWasm() {
             fsReadFileAsync(promiseId: number, pathOffset: number, pathLen: number) {
                 connection.console.log(`fsReadFileAsync(${promiseId}, ${pathOffset}, ${pathLen})`);
                 if (!wasmMemory || !wasmExports) {
-                    return 0;
+                    throw new Error("Unreachable");
                 }
-                // TODO: use async version
+                const exports = wasmExports;
+                const memory = wasmMemory;
+                const notifyResult = wasmExports.notifyFsReadFileAsyncResult as CallableFunction;
                 const path = new TextDecoder('utf-8').decode(
                     new Uint8Array(wasmMemory.buffer, pathOffset, pathLen));
-                const data = fs.readFileSync(path);
-
-                const wasmDataPtr = (wasmExports.allocateVec as CallableFunction)(data.length);
-                const wasmDataOffset = (wasmExports.vecOffset as CallableFunction)(wasmDataPtr);
-                new Uint8Array(wasmMemory.buffer, wasmDataOffset, data.length).set(data);
-                (wasmExports.notifyFsReadFileAsyncResult as CallableFunction)(serverPtr, promiseId, wasmDataPtr);
+                fs.readFile(
+                    path,
+                    (err, data) => {
+                        connection.console.log(`fsReadFileAsync(${promiseId}, ${path}) = ${err}`);
+                        if (err) {
+                            notifyResult(serverPtr, promiseId, 0);
+                        } else {
+                            const wasmDataPtr = (exports.allocateVec as CallableFunction)(data.length);
+                            const wasmDataOffset = (exports.vecOffset as CallableFunction)(wasmDataPtr);
+                            new Uint8Array(memory.buffer, wasmDataOffset, data.length).set(data);
+                            connection.console.log(`[notify] fsReadFileAsync(${promiseId}, ${path}) = ${data.length}`);
+                            notifyResult(serverPtr, promiseId, wasmDataPtr);
+                            connection.console.log("notified");
+                        }
+                    });
             },
             fsReadSubDirsAsync(promiseId: number, pathOffset: number, pathLen: number) {
                 connection.console.log(`fsReadSubDirsAsync(${promiseId}, ${pathOffset}, ${pathLen})`);
                 if (!wasmMemory || !wasmExports) {
-                    return 0;
+                    throw new Error("Unreachable");
                 }
                 // TODO: use async version
                 const parentDir = new TextDecoder('utf-8').decode(
@@ -136,7 +147,19 @@ async function handleIncomingMessage(
         (wasmExports.vecOffset as CallableFunction)(wasmMessagePtr);
     new Uint8Array(wasmMemory.buffer, wasmMessageOffset, messageJsonBytes.length).set(messageJsonBytes);
     (wasmExports.handleIncomingMessage as CallableFunction)(poolPtr, serverPtr, wasmMessagePtr);
-    (wasmExports.tryRunOne as CallableFunction)(poolPtr);
+    return new Promise((resolve, _reject) => waitOutgoingMessage(resolve));
+}
+
+async function waitOutgoingMessage(resolve: (result: any[] | object | undefined) => void) {
+    if (!wasmExports || !wasmMemory) {
+        throw new Error("Unreachable");
+    }
+
+    const ready = (wasmExports.tryRunOne as CallableFunction)(poolPtr);
+    if (!ready) {
+        setTimeout(() => waitOutgoingMessage(resolve), 100);// TODO
+        return;
+    }
 
     let resultParams: any[] | object | undefined = undefined;
     while (true) {
@@ -164,7 +187,7 @@ async function handleIncomingMessage(
         }
     }
 
-    return resultParams;
+    resolve(resultParams);
 }
 
 connection.onInitialize(async (params) => {
