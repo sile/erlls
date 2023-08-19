@@ -15,12 +15,11 @@ fn main() -> orfail::Result<()> {
     let stdout = std::io::stdout();
     let mut stdin = stdin.lock();
     let mut stdout = stdout.lock();
-    let mut buf = Vec::new();
     loop {
-        read_message(&mut stdin, &mut buf).or_fail()?;
+        let buf = read_message(&mut stdin).or_fail()?;
         log::debug!("Received JSON: {}", std::str::from_utf8(&buf).or_fail()?);
 
-        let future = server.handle_incoming_message(&buf);
+        let future = server.handle_incoming_message(buf);
         futures::executor::block_on(future);
 
         while let Some(msg) = server.take_outgoing_message() {
@@ -29,11 +28,11 @@ fn main() -> orfail::Result<()> {
     }
 }
 
-fn read_message<R: BufRead>(reader: &mut R, buf: &mut Vec<u8>) -> orfail::Result<()> {
+fn read_message<R: BufRead>(reader: &mut R) -> orfail::Result<Vec<u8>> {
     let header = Header::from_reader(reader).or_fail()?;
-    buf.resize(header.content_length, 0);
-    reader.read_exact(buf).or_fail()?;
-    Ok(())
+    let mut buf = vec![0; header.content_length];
+    reader.read_exact(&mut buf).or_fail()?;
+    Ok(buf)
 }
 
 fn write_message<W: Write>(writer: &mut W, msg: &[u8]) -> orfail::Result<()> {

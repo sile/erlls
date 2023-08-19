@@ -1,13 +1,15 @@
 #![allow(improper_ctypes, non_snake_case, clippy::not_unsafe_ptr_arg_deref)]
 
 use erlls_core::{config::Config, server::LanguageServer};
+use futures::executor::LocalPool;
+use futures::task::LocalSpawnExt;
 use orfail::OrFail;
 use std::{
     collections::HashMap,
     future::{self, Future},
     path::{Path, PathBuf},
     sync::mpsc,
-    task::{Poll, Waker},
+    task::Poll,
 };
 
 extern "C" {
@@ -21,13 +23,12 @@ struct ConfigDelta {
     pub erl_libs: Option<Vec<PathBuf>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct FileSystem {
     promise_id: u32,
-    wakers: HashMap<u32, Waker>,
-    waker_tx: mpsc::Sender<(u32, Waker)>,
-    waker_rx: mpsc::Receiver<(u32, Waker)>,
     exists_promises: HashMap<u32, mpsc::Sender<bool>>,
+    read_file_promises: HashMap<u32, mpsc::Sender<Option<Vec<u8>>>>,
+    read_sub_dirs_promises: HashMap<u32, mpsc::Sender<Option<Vec<u8>>>>,
 }
 
 impl FileSystem {
@@ -37,37 +38,51 @@ impl FileSystem {
     }
 }
 
-impl Default for FileSystem {
-    fn default() -> Self {
-        let (waker_tx, waker_rx) = mpsc::channel();
-        Self {
-            promise_id: 0,
-            wakers: HashMap::new(),
-            waker_tx,
-            waker_rx,
-            exists_promises: HashMap::new(),
-        }
-    }
-}
-
 #[no_mangle]
 pub fn notifyFsExistsAsyncResult(
     server: *mut LanguageServer<FileSystem>,
     promise_id: u32,
     exists: bool,
 ) {
-    unsafe {
-        let server = &mut *server;
-        let _ = server
-            .fs_mut()
-            .exists_promises
-            .remove(&promise_id)
-            .expect("unreachable")
-            .send(exists);
-        if let Some(waker) = server.fs_mut().wakers.remove(&promise_id) {
-            waker.wake();
-        }
-    }
+    let server = unsafe { &mut *server };
+    let _ = server
+        .fs_mut()
+        .exists_promises
+        .remove(&promise_id)
+        .expect("unreachable")
+        .send(exists);
+}
+
+#[no_mangle]
+pub fn notifyFsReadFileAsyncResult(
+    server: *mut LanguageServer<FileSystem>,
+    promise_id: u32,
+    vec_ptr: *mut Vec<u8>,
+) {
+    let vec = unsafe { (!vec_ptr.is_null()).then(|| *Box::from_raw(vec_ptr)) };
+    let server = unsafe { &mut *server };
+    let _ = server
+        .fs_mut()
+        .read_file_promises
+        .remove(&promise_id)
+        .expect("unreachable")
+        .send(vec);
+}
+
+#[no_mangle]
+pub fn notifyFsReadSubDirsAsyncResult(
+    server: *mut LanguageServer<FileSystem>,
+    promise_id: u32,
+    vec_ptr: *mut Vec<u8>,
+) {
+    let vec = unsafe { (!vec_ptr.is_null()).then(|| *Box::from_raw(vec_ptr)) };
+    let server = unsafe { &mut *server };
+    let _ = server
+        .fs_mut()
+        .read_sub_dirs_promises
+        .remove(&promise_id)
+        .expect("unreachable")
+        .send(vec);
 }
 
 impl erlls_core::fs::FileSystem for FileSystem {
@@ -78,15 +93,13 @@ impl erlls_core::fs::FileSystem for FileSystem {
 
         if let Some(path) = path.as_ref().to_str() {
             let promise_id = self.next_promise_id();
-            let waker_tx = self.waker_tx.clone();
             let (tx, rx) = mpsc::channel();
             unsafe { fsExistsAsync(promise_id, path.as_ptr(), path.len() as u32) };
             self.exists_promises.insert(promise_id, tx);
-            Box::new(future::poll_fn(move |ctx| {
+            Box::new(future::poll_fn(move |_ctx| {
                 if let Ok(exists) = rx.try_recv() {
                     Poll::Ready(exists)
                 } else {
-                    let _ = waker_tx.send((promise_id, ctx.waker().clone()));
                     Poll::Pending
                 }
             }))
@@ -99,40 +112,48 @@ impl erlls_core::fs::FileSystem for FileSystem {
         &mut self,
         path: P,
     ) -> Box<dyn Unpin + Future<Output = orfail::Result<String>>> {
-        // extern "C" {
-        //     fn fsReadFile(path: *const u8, path_len: u32) -> *mut Vec<u8>;
-        // }
+        extern "C" {
+            fn fsReadFileAsync(promise_id: u32, path: *const u8, path_len: u32);
+        }
 
-        // let path = path.as_ref().to_str().or_fail()?;
-        // let vec = unsafe {
-        //     let vec_ptr = fsReadFile(path.as_ptr(), path.len() as u32);
-        //     if vec_ptr.is_null() {
-        //         return Err(orfail::Failure::new("Failed to read file"));
-        //     }
-        //     *Box::from_raw(vec_ptr)
-        // };
-        // String::from_utf8(vec).or_fail()
-        todo!()
+        match path.as_ref().to_str().or_fail() {
+            Err(e) => Box::new(future::ready(Err(e))),
+            Ok(path) => {
+                let promise_id = self.next_promise_id();
+                let (tx, rx) = mpsc::channel();
+                unsafe { fsReadFileAsync(promise_id, path.as_ptr(), path.len() as u32) };
+                self.read_file_promises.insert(promise_id, tx);
+                Box::new(future::poll_fn(move |_ctx| match rx.try_recv() {
+                    Err(_) => Poll::Pending,
+                    Ok(None) => Poll::Ready(Err(orfail::Failure::new("Failed to read file"))),
+                    Ok(Some(vec)) => Poll::Ready(String::from_utf8(vec).or_fail()),
+                }))
+            }
+        }
     }
 
     fn read_sub_dirs<P: AsRef<Path>>(
         &mut self,
         path: P,
     ) -> Box<dyn Unpin + Future<Output = orfail::Result<Vec<PathBuf>>>> {
-        // extern "C" {
-        //     fn fsReadSubDirs(path: *const u8, path_len: u32) -> *mut Vec<u8>;
-        // }
+        extern "C" {
+            fn fsReadSubDirsAsync(promise_id: u32, path: *const u8, path_len: u32);
+        }
 
-        // let path = path.as_ref().to_str().or_fail()?;
-        // let vec = unsafe {
-        //     let vec_ptr = fsReadSubDirs(path.as_ptr(), path.len() as u32);
-        //     if vec_ptr.is_null() {
-        //         return Err(orfail::Failure::new("Failed to read directory"));
-        //     }
-        //     *Box::from_raw(vec_ptr)
-        // };
-        // serde_json::from_slice(&vec).or_fail()
-        todo!()
+        match path.as_ref().to_str().or_fail() {
+            Err(e) => Box::new(future::ready(Err(e))),
+            Ok(path) => {
+                let promise_id = self.next_promise_id();
+                let (tx, rx) = mpsc::channel();
+                unsafe { fsReadSubDirsAsync(promise_id, path.as_ptr(), path.len() as u32) };
+                self.read_sub_dirs_promises.insert(promise_id, tx);
+                Box::new(future::poll_fn(move |_ctx| match rx.try_recv() {
+                    Err(_) => Poll::Pending,
+                    Ok(None) => Poll::Ready(Err(orfail::Failure::new("Failed to read directory"))),
+                    Ok(Some(vec)) => Poll::Ready(serde_json::from_slice(&vec).or_fail()),
+                }))
+            }
+        }
     }
 }
 
@@ -154,6 +175,19 @@ pub fn allocateVec(len: i32) -> *mut Vec<u8> {
 #[no_mangle]
 pub fn freeVec(v: *mut Vec<u8>) {
     let _ = unsafe { Box::from_raw(v) };
+}
+
+#[no_mangle]
+pub fn newLocalPool() -> *mut LocalPool {
+    Box::into_raw(Box::new(LocalPool::new()))
+}
+
+#[no_mangle]
+pub fn tryRunOne(pool: *mut LocalPool) -> bool {
+    unsafe {
+        let pool = &mut *pool;
+        pool.try_run_one()
+    }
 }
 
 #[no_mangle]
@@ -186,11 +220,18 @@ pub fn updateConfig(server: *mut LanguageServer<FileSystem>, config_json_ptr: *m
 }
 
 #[no_mangle]
-pub fn handleIncomingMessage(server: *mut LanguageServer<FileSystem>, message_ptr: *mut Vec<u8>) {
+pub fn handleIncomingMessage(
+    pool: *mut LocalPool,
+    server: *mut LanguageServer<FileSystem>,
+    message_ptr: *mut Vec<u8>,
+) {
     unsafe {
-        let message = *Box::from_raw(message_ptr);
+        let pool = &mut *pool;
         let server = &mut *server;
-        server.handle_incoming_message(&message);
+        let message = *Box::from_raw(message_ptr);
+        pool.spawner()
+            .spawn_local(server.handle_incoming_message(message))
+            .expect("unreachable");
     }
 }
 

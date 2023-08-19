@@ -57,8 +57,8 @@ impl<FS: FileSystem> LanguageServer<FS> {
         self.document_repository.update_config(config);
     }
 
-    pub async fn handle_incoming_message(&mut self, json: &[u8]) {
-        let msg = match serde_json::from_slice(json) {
+    pub async fn handle_incoming_message(&mut self, json: Vec<u8>) {
+        let msg = match serde_json::from_slice(&json) {
             Err(e) => {
                 log::warn!("Invalid message: {e}");
                 return;
