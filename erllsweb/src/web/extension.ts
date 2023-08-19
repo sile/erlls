@@ -1,27 +1,37 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import { LanguageClientOptions } from 'vscode-languageclient';
+import { LanguageClient } from 'vscode-languageclient/browser';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
-
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "erllsweb" is now active in the web extension host!');
-
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	let disposable = vscode.commands.registerCommand('erllsweb.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from erllsweb in a web extension host!');
-	});
-
-	context.subscriptions.push(disposable);
+export async function activate(context: vscode.ExtensionContext) {
+    console.log('ErlLS is activated.');
+    const clientOptions: LanguageClientOptions = {
+        documentSelector: [{ scheme: 'file', language: 'erlang' }]
+    };
+    const client = await createWorkerLanguageClient(context, clientOptions);
+    await client.start();
+    console.log('ErlLS server is ready.');
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+async function createWorkerLanguageClient(context: vscode.ExtensionContext, clientOptions: LanguageClientOptions): Promise<LanguageClient> {
+    // const uri = vscode.Uri.file('/etc/hosts');
+    // console.log('uri: ' + uri);
+    // const data = await vscode.workspace.fs.readFile(uri);
+    // console.log('data: ' + data);
+
+    const serverMain = vscode.Uri.joinPath(context.extensionUri, 'dist/web/server.js');
+    const worker = new Worker(serverMain.toString(true));
+
+    const channel = new MessageChannel();
+    const wasmUri = vscode.Uri.joinPath(context.extensionUri, 'dist/web/erlls.wasm');
+    const wasmBytes = await (await fetch(wasmUri.toString(true))).arrayBuffer();
+    worker.postMessage(
+        { 'type': 'initialize', wasmBytes, 'port': channel.port2 },
+        [wasmBytes, channel.port2]
+    );
+
+    const port = channel.port1;
+    port.onmessage = (_msg) => {
+    };
+
+    return new LanguageClient('erllsweb', 'ErlLS Web', clientOptions, worker);
+}
