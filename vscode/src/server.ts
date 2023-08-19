@@ -13,7 +13,9 @@ const wasmPath = args[0];
 const wasmBuffer = fs.readFileSync(wasmPath);
 let wasmMemory: WebAssembly.Memory | undefined;
 let wasmInstance: WebAssembly.Instance | undefined;
+let wasmExports: WebAssembly.Exports | undefined;
 let serverPtr: number = 0;
+let poolPtr: number = 0;
 
 const configJson = args[1];
 const config = JSON.parse(configJson);
@@ -31,31 +33,40 @@ async function initializeWasm() {
                     new Uint8Array(wasmMemory.buffer, msgOffset, msgLen));
                 connection.console.log(msg);
             },
-            fsExists(pathOffset: number, pathLen: number): boolean {
-                if (!wasmMemory) {
+            fsExistsAsync(promiseId: number, pathOffset: number, pathLen: number) {
+                connection.console.log(`fsExistsAsync(${promiseId}, ${pathOffset}, ${pathLen})`);
+
+                if (!wasmMemory || !wasmExports) {
                     return false;
                 }
                 const path = new TextDecoder('utf-8').decode(
                     new Uint8Array(wasmMemory.buffer, pathOffset, pathLen));
-                return fs.existsSync(path);
+                const result = fs.existsSync(path);
+                connection.console.log(`fsExistsAsync(${promiseId}, ${path}) = ${result}`);
+                (wasmExports.notifyFsExistsAsyncResult as CallableFunction)(serverPtr, promiseId, result);
+
             },
-            fsReadFile(pathOffset: number, pathLen: number): number {
-                if (!wasmMemory || !wasmInstance) {
+            fsReadFileAsync(promiseId: number, pathOffset: number, pathLen: number) {
+                connection.console.log(`fsReadFileAsync(${promiseId}, ${pathOffset}, ${pathLen})`);
+                if (!wasmMemory || !wasmExports) {
                     return 0;
                 }
+                // TODO: use async version
                 const path = new TextDecoder('utf-8').decode(
                     new Uint8Array(wasmMemory.buffer, pathOffset, pathLen));
                 const data = fs.readFileSync(path);
 
-                const wasmDataPtr = (wasmInstance.exports.allocateVec as CallableFunction)(data.length);
-                const wasmDataOffset = (wasmInstance.exports.vecOffset as CallableFunction)(wasmDataPtr);
+                const wasmDataPtr = (wasmExports.allocateVec as CallableFunction)(data.length);
+                const wasmDataOffset = (wasmExports.vecOffset as CallableFunction)(wasmDataPtr);
                 new Uint8Array(wasmMemory.buffer, wasmDataOffset, data.length).set(data);
-                return wasmDataPtr;
+                (wasmExports.notifyFsReadFileAsyncResult as CallableFunction)(serverPtr, promiseId, wasmDataPtr);
             },
-            fsReadSubDirs(pathOffset: number, pathLen: number): number {
-                if (!wasmMemory || !wasmInstance) {
+            fsReadSubDirsAsync(promiseId: number, pathOffset: number, pathLen: number) {
+                connection.console.log(`fsReadSubDirsAsync(${promiseId}, ${pathOffset}, ${pathLen})`);
+                if (!wasmMemory || !wasmExports) {
                     return 0;
                 }
+                // TODO: use async version
                 const parentDir = new TextDecoder('utf-8').decode(
                     new Uint8Array(wasmMemory.buffer, pathOffset, pathLen));
                 let subDirsJson;
@@ -70,20 +81,22 @@ async function initializeWasm() {
                 }
 
                 const data = new TextEncoder().encode(subDirsJson);
-                const wasmDataPtr = (wasmInstance.exports.allocateVec as CallableFunction)(data.length);
-                const wasmDataOffset = (wasmInstance.exports.vecOffset as CallableFunction)(wasmDataPtr);
+                const wasmDataPtr = (wasmExports.allocateVec as CallableFunction)(data.length);
+                const wasmDataOffset = (wasmExports.vecOffset as CallableFunction)(wasmDataPtr);
                 new Uint8Array(wasmMemory.buffer, wasmDataOffset, data.length).set(data);
-                return wasmDataPtr;
+                (wasmExports.notifyFsReadSubDirsAsyncResult as CallableFunction)(serverPtr, promiseId, wasmDataPtr);
             },
         }
     };
     wasmInstance = (await WebAssembly.instantiate(wasmBuffer, importOjbect)).instance;
-    wasmMemory = wasmInstance.exports.memory as WebAssembly.Memory;
+    wasmExports = wasmInstance.exports;
+    wasmMemory = wasmExports.memory as WebAssembly.Memory;
 
-    serverPtr = (wasmInstance.exports.newServer as CallableFunction)();
+    serverPtr = (wasmExports.newServer as CallableFunction)();
+    poolPtr = (wasmExports.newLocalPool as CallableFunction)();
 
     child_process.exec("erl -boot start_clean -noshell -eval 'io:format(code:lib_dir(kernel)).' -s init stop", (_error, stdout, _stderr) => {
-        if (wasmInstance === undefined || wasmMemory === undefined) {
+        if (wasmExports === undefined || wasmMemory === undefined) {
             return;
         }
         if (!stdout) {
@@ -97,45 +110,46 @@ async function initializeWasm() {
         const config = { "erlLibs": [libDir, "_checkouts", "_build/default/lib"] };
         const configJsonBytes = new TextEncoder().encode(JSON.stringify(config));
         const wasmConfigPtr =
-            (wasmInstance.exports.allocateVec as CallableFunction)(configJsonBytes.length);
+            (wasmExports.allocateVec as CallableFunction)(configJsonBytes.length);
         const wasmConfigOffset =
-            (wasmInstance.exports.vecOffset as CallableFunction)(wasmConfigPtr);
+            (wasmExports.vecOffset as CallableFunction)(wasmConfigPtr);
         new Uint8Array(wasmMemory.buffer, wasmConfigOffset, configJsonBytes.length).set(configJsonBytes);
-        (wasmInstance.exports.updateConfig as CallableFunction)(serverPtr, wasmConfigPtr);
+        (wasmExports.updateConfig as CallableFunction)(serverPtr, wasmConfigPtr);
     });
 }
 
 async function handleIncomingMessage(
     message: object
 ): Promise<any[] | object | undefined> {
-    if (!wasmInstance || !wasmMemory) {
+    connection.console.log(`handleIncomingMessage()`);
+    if (!wasmExports || !wasmMemory) {
         await initializeWasm();
     }
-    if (!wasmInstance || !wasmMemory) {
+    if (!wasmExports || !wasmMemory) {
         throw new Error("Failed to initialize wasm");
     }
     const messageJsonBytes = new TextEncoder().encode(JSON.stringify(message));
 
     const wasmMessagePtr =
-        (wasmInstance.exports.allocateVec as CallableFunction)(messageJsonBytes.length);
+        (wasmExports.allocateVec as CallableFunction)(messageJsonBytes.length);
     const wasmMessageOffset =
-        (wasmInstance.exports.vecOffset as CallableFunction)(wasmMessagePtr);
+        (wasmExports.vecOffset as CallableFunction)(wasmMessagePtr);
     new Uint8Array(wasmMemory.buffer, wasmMessageOffset, messageJsonBytes.length).set(messageJsonBytes);
-    (wasmInstance.exports.handleIncomingMessage as CallableFunction)(serverPtr, wasmMessagePtr);
-
+    (wasmExports.handleIncomingMessage as CallableFunction)(poolPtr, serverPtr, wasmMessagePtr);
+    (wasmExports.tryRunOne as CallableFunction)(poolPtr);
 
     let resultParams: any[] | object | undefined = undefined;
     while (true) {
         const wasmOutgoingMessagePtr =
-            (wasmInstance.exports.takeOutgoingMessage as CallableFunction)(serverPtr);
+            (wasmExports.takeOutgoingMessage as CallableFunction)(serverPtr);
         if (wasmOutgoingMessagePtr === 0) {
             break;
         }
 
         const wasmOutgoingMessageLen =
-            (wasmInstance.exports.vecLen as CallableFunction)(wasmOutgoingMessagePtr);
+            (wasmExports.vecLen as CallableFunction)(wasmOutgoingMessagePtr);
         const wasmOutgoingMessageOffset =
-            (wasmInstance.exports.vecOffset as CallableFunction)(wasmOutgoingMessagePtr);
+            (wasmExports.vecOffset as CallableFunction)(wasmOutgoingMessagePtr);
         const outgoingMessageJson = new TextDecoder().decode(
             new Uint8Array(wasmMemory.buffer, wasmOutgoingMessageOffset, wasmOutgoingMessageLen));
         const outgoingMessage = JSON.parse(outgoingMessageJson);

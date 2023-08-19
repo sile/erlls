@@ -94,8 +94,8 @@ impl erlls_core::fs::FileSystem for FileSystem {
         if let Some(path) = path.as_ref().to_str() {
             let promise_id = self.next_promise_id();
             let (tx, rx) = mpsc::channel();
-            unsafe { fsExistsAsync(promise_id, path.as_ptr(), path.len() as u32) };
             self.exists_promises.insert(promise_id, tx);
+            unsafe { fsExistsAsync(promise_id, path.as_ptr(), path.len() as u32) };
             Box::new(future::poll_fn(move |_ctx| {
                 if let Ok(exists) = rx.try_recv() {
                     Poll::Ready(exists)
@@ -121,8 +121,8 @@ impl erlls_core::fs::FileSystem for FileSystem {
             Ok(path) => {
                 let promise_id = self.next_promise_id();
                 let (tx, rx) = mpsc::channel();
-                unsafe { fsReadFileAsync(promise_id, path.as_ptr(), path.len() as u32) };
                 self.read_file_promises.insert(promise_id, tx);
+                unsafe { fsReadFileAsync(promise_id, path.as_ptr(), path.len() as u32) };
                 Box::new(future::poll_fn(move |_ctx| match rx.try_recv() {
                     Err(_) => Poll::Pending,
                     Ok(None) => Poll::Ready(Err(orfail::Failure::new("Failed to read file"))),
@@ -145,8 +145,8 @@ impl erlls_core::fs::FileSystem for FileSystem {
             Ok(path) => {
                 let promise_id = self.next_promise_id();
                 let (tx, rx) = mpsc::channel();
-                unsafe { fsReadSubDirsAsync(promise_id, path.as_ptr(), path.len() as u32) };
                 self.read_sub_dirs_promises.insert(promise_id, tx);
+                unsafe { fsReadSubDirsAsync(promise_id, path.as_ptr(), path.len() as u32) };
                 Box::new(future::poll_fn(move |_ctx| match rx.try_recv() {
                     Err(_) => Poll::Pending,
                     Ok(None) => Poll::Ready(Err(orfail::Failure::new("Failed to read directory"))),
@@ -193,14 +193,15 @@ pub fn tryRunOne(pool: *mut LocalPool) -> bool {
 #[no_mangle]
 pub fn newServer() -> *mut LanguageServer<FileSystem> {
     std::panic::set_hook(Box::new(|info| {
-        let msg = info.to_string();
-        unsafe {
-            consoleLog(msg.as_ptr(), msg.len() as u32);
-        }
+        println(&info.to_string());
     }));
 
     let config = Config::default();
     Box::into_raw(Box::new(LanguageServer::new(config, FileSystem::default())))
+}
+
+fn println(msg: &str) {
+    unsafe { consoleLog(msg.as_ptr(), msg.len() as u32) };
 }
 
 #[no_mangle]
