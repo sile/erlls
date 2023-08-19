@@ -59,6 +59,7 @@ self.onmessage = async (msg: Message) => {
             case 'fsReadSubDirs.reply':
                 {
                     const dirsJson = JSON.stringify(msg.data.dirs);
+                    connection.console.log("dirsJson: " + dirsJson);
                     const data = new TextEncoder().encode(dirsJson);
                     const wasmDataPtr = (wasmExports.allocateVec as CallableFunction)(data.length);
                     const wasmDataOffset = (wasmExports.vecOffset as CallableFunction)(wasmDataPtr);

@@ -81,12 +81,23 @@ function handlePortMessage(port: MessagePort, msg: PortMessage) {
         case 'fsReadSubDirs.call':
             {
                 const { promiseId, path } = msg.data;
-                vscode.workspace.fs.readDirectory(vscode.Uri.file(path)).then(
+                const parentDirUri = vscode.Uri.file(path);
+                vscode.workspace.fs.readDirectory(parentDirUri).then(
                     (entries) => {
+                        //const wasmUri = vscode.Uri.joinPath(context.extensionUri, 'dist/web/erlls.wasm');
+
                         // TODO
                         console.log('path: ' + path);
                         console.log('entries: ' + JSON.stringify(entries));
-                        port.postMessage({ type: 'fsReadSubDirs.reply', promiseId, dirs: [] });
+                        const dirs = [];
+                        for (const [name, type] of entries) {
+                            if (type === vscode.FileType.Directory || type === vscode.FileType.SymbolicLink) {
+                                const dir = vscode.Uri.joinPath(parentDirUri, name).path;
+                                dirs.push(dir);
+                            }
+                        }
+                        console.log(dirs);
+                        port.postMessage({ type: 'fsReadSubDirs.reply', promiseId, dirs });
                     },
                     () => port.postMessage({ type: 'fsReadSubDirs.reply', promiseId, dirs: [] }),
                 );
