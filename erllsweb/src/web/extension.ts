@@ -13,11 +13,6 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 async function createWorkerLanguageClient(context: vscode.ExtensionContext, clientOptions: LanguageClientOptions): Promise<LanguageClient> {
-    // const uri = vscode.Uri.file('/etc/hosts');
-    // console.log('uri: ' + uri);
-    // const data = await vscode.workspace.fs.readFile(uri);
-    // console.log('data: ' + data);
-
     const serverMain = vscode.Uri.joinPath(context.extensionUri, 'dist/web/server.js');
     const worker = new Worker(serverMain.toString(true));
 
@@ -31,16 +26,74 @@ async function createWorkerLanguageClient(context: vscode.ExtensionContext, clie
 
     const port = channel.port1;
     return new Promise((resolve, _reject) => {
-        port.onmessage = (msg: Message) => {
+        port.onmessage = (msg: PortMessage) => {
+            console.log("here");
             switch (msg.data.type) {
                 case 'initialized':
                     resolve(new LanguageClient('erllsweb', 'ErlLS Web', clientOptions, worker));
                     break
                 default:
-                    console.warn('Unknown message: ' + JSON.stringify(msg.data));
+                    handlePortMessage(port, msg);
             }
         };
     });
 }
 
-type Message = { data: { type: 'initialized' } };
+type PortMessage = {
+    data:
+    { type: 'initialized' } |
+    { type: 'fsExists.call', promiseId: number, path: string } |
+    { type: 'fsReadFile.call', promiseId: number, path: string } |
+    { type: 'fsReadSubDirs.call', promiseId: number, path: string }
+};
+
+function handlePortMessage(port: MessagePort, msg: PortMessage) {
+    console.log('handlePortMessage: ' + JSON.stringify(msg.data));
+    switch (msg.data.type) {
+        case 'fsExists.call':
+            {
+                const { promiseId, path } = msg.data;
+                vscode.workspace.fs.stat(vscode.Uri.file(path)).then(
+                    (stat) => {
+                        console.log('path: ' + path);
+                        console.log('stat: ' + JSON.stringify(stat));
+                        port.postMessage({ type: 'fsExists.reply', promiseId, result: true })
+                    },
+                    (reason) => {
+                        console.log('path: ' + path);
+                        console.log('reason: ' + JSON.stringify(reason));
+                        port.postMessage({ type: 'fsExists.reply', promiseId, result: false })
+                    }
+                );
+            }
+            break;
+        case 'fsReadFile.call':
+            {
+                const { promiseId, path } = msg.data;
+                vscode.workspace.fs.readFile(vscode.Uri.file(path)).then(
+                    (content) => {
+                        port.postMessage({ type: 'fsReadFile.reply', promiseId, content }, [content.buffer]);
+                    },
+                    () => port.postMessage({ type: 'fsReadFile.reply', promiseId, content: null }),
+                );
+            }
+            break;
+        case 'fsReadSubDirs.call':
+            {
+                const { promiseId, path } = msg.data;
+                vscode.workspace.fs.readDirectory(vscode.Uri.file(path)).then(
+                    (entries) => {
+                        // TODO
+                        console.log('path: ' + path);
+                        console.log('entries: ' + JSON.stringify(entries));
+                        port.postMessage({ type: 'fsReadSubDirs.reply', promiseId, dirs: [] });
+                    },
+                    () => port.postMessage({ type: 'fsReadSubDirs.reply', promiseId, dirs: [] }),
+                );
+            }
+            break;
+        default:
+            console.warn('Unknown message: ' + JSON.stringify(msg.data));
+
+    }
+}

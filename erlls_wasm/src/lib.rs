@@ -60,6 +60,7 @@ pub fn notifyFsExistsAsyncResult(
     promise_id: u32,
     exists: bool,
 ) {
+    println("@@@ notifyFsExistsAsyncResult");
     let server = unsafe { &mut *server };
     let _ = server
         .fs_mut()
@@ -67,6 +68,11 @@ pub fn notifyFsExistsAsyncResult(
         .remove(&promise_id)
         .expect("unreachable")
         .send(exists);
+    let _ = server
+        .fs_mut()
+        .waker_rx
+        .try_recv()
+        .map(|waker| waker.wake());
 }
 
 #[no_mangle]
@@ -105,6 +111,11 @@ pub fn notifyFsReadSubDirsAsyncResult(
         .remove(&promise_id)
         .expect("unreachable")
         .send(vec);
+    let _ = server
+        .fs_mut()
+        .waker_rx
+        .try_recv()
+        .map(|waker| waker.wake());
 }
 
 impl erlls_core::fs::FileSystem for FileSystem {
@@ -116,12 +127,16 @@ impl erlls_core::fs::FileSystem for FileSystem {
         if let Some(path) = path.as_ref().to_str() {
             let promise_id = self.next_promise_id();
             let (tx, rx) = mpsc::channel();
+            let waker_tx = self.waker_tx.clone();
             self.exists_promises.insert(promise_id, tx);
             unsafe { fsExistsAsync(promise_id, path.as_ptr(), path.len() as u32) };
-            Box::new(future::poll_fn(move |_ctx| {
+            Box::new(future::poll_fn(move |ctx| {
                 if let Ok(exists) = rx.try_recv() {
+                    println("@@@ notifyFsExistsAsyncResult: ready");
                     Poll::Ready(exists)
                 } else {
+                    println("@@@ notifyFsExistsAsyncResult: pending");
+                    let _ = waker_tx.send(ctx.waker().clone());
                     Poll::Pending
                 }
             }))
@@ -156,7 +171,13 @@ impl erlls_core::fs::FileSystem for FileSystem {
                         Err(TryRecvError::Disconnected) | Ok(None) => {
                             Poll::Ready(Err(orfail::Failure::new("Failed to read file")))
                         }
-                        Ok(Some(vec)) => Poll::Ready(String::from_utf8(vec).or_fail()),
+                        Ok(Some(vec)) => {
+                            println(&format!(
+                                "@@@ notifyFsReadFileAsyncResult: ready: {} bytes",
+                                vec.len()
+                            ));
+                            Poll::Ready(String::from_utf8(vec).or_fail())
+                        }
                     }
                 }))
             }
@@ -176,10 +197,14 @@ impl erlls_core::fs::FileSystem for FileSystem {
             Ok(path) => {
                 let promise_id = self.next_promise_id();
                 let (tx, rx) = mpsc::channel();
+                let waker_tx = self.waker_tx.clone();
                 self.read_sub_dirs_promises.insert(promise_id, tx);
                 unsafe { fsReadSubDirsAsync(promise_id, path.as_ptr(), path.len() as u32) };
-                Box::new(future::poll_fn(move |_ctx| match rx.try_recv() {
-                    Err(TryRecvError::Empty) => Poll::Pending,
+                Box::new(future::poll_fn(move |ctx| match rx.try_recv() {
+                    Err(TryRecvError::Empty) => {
+                        let _ = waker_tx.send(ctx.waker().clone());
+                        Poll::Pending
+                    }
                     Err(TryRecvError::Disconnected) | Ok(None) => {
                         Poll::Ready(Err(orfail::Failure::new("Failed to read directory")))
                     }
