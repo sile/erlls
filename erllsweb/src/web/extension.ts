@@ -5,7 +5,7 @@ import { LanguageClient } from 'vscode-languageclient/browser';
 export async function activate(context: vscode.ExtensionContext) {
     console.log('ErlLS is activated.');
     const clientOptions: LanguageClientOptions = {
-        documentSelector: [{ scheme: 'file', language: 'erlang' }]
+        documentSelector: [{ language: 'erlang' }]
     };
     const client = await createWorkerLanguageClient(context, clientOptions);
     await client.start();

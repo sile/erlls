@@ -229,6 +229,16 @@ self.onmessage = async (msg: Message) => {
         await handleIncomingMessage(message);
     });
 
+    // connection.onDidOpenTextDocument(async (params) => {
+    //     const message = {
+    //         jsonrpc: "2.0",
+    //         method: "textDocument/didOpen",
+    //         params
+    //     };
+    //     await handleIncomingMessage(message) as InitializeResult;
+    // });
+
+
     connection.console.log("ErlLS server started");
     connection.listen();
 }
