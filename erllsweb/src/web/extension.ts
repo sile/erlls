@@ -30,8 +30,17 @@ async function createWorkerLanguageClient(context: vscode.ExtensionContext, clie
     );
 
     const port = channel.port1;
-    port.onmessage = (_msg) => {
-    };
-
-    return new LanguageClient('erllsweb', 'ErlLS Web', clientOptions, worker);
+    return new Promise((resolve, _reject) => {
+        port.onmessage = (msg: Message) => {
+            switch (msg.data.type) {
+                case 'initialized':
+                    resolve(new LanguageClient('erllsweb', 'ErlLS Web', clientOptions, worker));
+                    break
+                default:
+                    console.warn('Unknown message: ' + JSON.stringify(msg.data));
+            }
+        };
+    });
 }
+
+type Message = { data: { type: 'initialized' } };
