@@ -1,18 +1,16 @@
-use std::{
-    future::Future,
-    path::{Path, PathBuf},
-};
+use crate::message::DocumentUri;
+use std::future::Future;
 
 pub trait FileSystem {
-    fn exists<P: AsRef<Path>>(&mut self, path: P) -> Box<dyn Unpin + Future<Output = bool>>;
+    fn exists(&mut self, uri: &DocumentUri) -> Box<dyn Unpin + Future<Output = bool>>;
 
-    fn read_file<P: AsRef<Path>>(
+    fn read_file(
         &mut self,
-        path: P,
+        uri: &DocumentUri,
     ) -> Box<dyn Unpin + Future<Output = orfail::Result<String>>>;
 
-    fn read_sub_dirs<P: AsRef<Path>>(
+    fn read_sub_dirs(
         &mut self,
-        path: P,
-    ) -> Box<dyn Unpin + Future<Output = orfail::Result<Vec<PathBuf>>>>;
+        uri: &DocumentUri,
+    ) -> Box<dyn Unpin + Future<Output = orfail::Result<Vec<DocumentUri>>>>;
 }

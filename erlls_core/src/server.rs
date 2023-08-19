@@ -167,12 +167,12 @@ impl<FS: FileSystem> LanguageServer<FS> {
         &mut self,
         params: InitializeParams,
     ) -> Result<ResponseMessage, ResponseError> {
-        let root_dir = params.root_uri.path().to_path_buf();
-        self.config.root_dir = root_dir;
+        let root_uri = params.root_uri().or_fail()?.clone();
+        self.config.root_uri = root_uri;
         self.update_config(self.config.clone());
 
         log::info!("Client: {:?}", params.client_info);
-        log::info!("Server config: {:?}", self.config.root_dir);
+        log::info!("Server config: {:?}", self.config.root_uri);
         log::info!("Client capabilities: {:?}", params.capabilities);
 
         // Client capabilities check

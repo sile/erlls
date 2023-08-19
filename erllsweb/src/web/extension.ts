@@ -69,8 +69,9 @@ function handlePortMessage(port: MessagePort, msg: PortMessage) {
     switch (msg.data.type) {
         case 'fsExists.call':
             {
-                const { promiseId, path } = msg.data;
-                vscode.workspace.fs.stat(vscode.Uri.file(path)).then(
+                const { promiseId, path } = msg.data; // TODO: s/path/uri/
+                const uri = vscode.Uri.parse(path);
+                vscode.workspace.fs.stat(uri).then(
                     (stat) => {
                         console.log('path: ' + path);
                         console.log('stat: ' + JSON.stringify(stat));
@@ -86,8 +87,9 @@ function handlePortMessage(port: MessagePort, msg: PortMessage) {
             break;
         case 'fsReadFile.call':
             {
-                const { promiseId, path } = msg.data;
-                vscode.workspace.fs.readFile(vscode.Uri.file(path)).then(
+                const { promiseId, path } = msg.data; // TODO: s/path/uri/
+                const uri = vscode.Uri.parse(path);
+                vscode.workspace.fs.readFile(uri).then(
                     (content) => {
                         port.postMessage({ type: 'fsReadFile.reply', promiseId, content }, [content.buffer]);
                     },
@@ -97,8 +99,8 @@ function handlePortMessage(port: MessagePort, msg: PortMessage) {
             break;
         case 'fsReadSubDirs.call':
             {
-                const { promiseId, path } = msg.data;
-                const parentDirUri = vscode.Uri.file(path);
+                const { promiseId, path } = msg.data; // TODO: s/path/uri/
+                const parentDirUri = vscode.Uri.parse(path);
                 vscode.workspace.fs.readDirectory(parentDirUri).then(
                     (entries) => {
                         //const wasmUri = vscode.Uri.joinPath(context.extensionUri, 'dist/web/erlls.wasm');
@@ -109,7 +111,7 @@ function handlePortMessage(port: MessagePort, msg: PortMessage) {
                         const dirs = [];
                         for (const [name, type] of entries) {
                             if (type === vscode.FileType.Directory || type === vscode.FileType.SymbolicLink) {
-                                const dir = vscode.Uri.joinPath(parentDirUri, name).path;
+                                const dir = vscode.Uri.joinPath(parentDirUri, name).toString();
                                 dirs.push(dir);
                             }
                         }

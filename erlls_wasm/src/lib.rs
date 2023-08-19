@@ -1,13 +1,13 @@
 #![allow(improper_ctypes, non_snake_case, clippy::not_unsafe_ptr_arg_deref)]
 
-use erlls_core::{config::Config, server::LanguageServer};
+use erlls_core::{config::Config, message::DocumentUri, server::LanguageServer};
 use futures::executor::LocalPool;
 use futures::task::LocalSpawnExt;
 use orfail::OrFail;
 use std::{
     collections::HashMap,
     future::{self, Future},
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::mpsc::{self, TryRecvError},
     task::{Poll, Waker},
 };
@@ -119,99 +119,88 @@ pub fn notifyFsReadSubDirsAsyncResult(
 }
 
 impl erlls_core::fs::FileSystem for FileSystem {
-    fn exists<P: AsRef<Path>>(&mut self, path: P) -> Box<dyn Unpin + Future<Output = bool>> {
+    fn exists(&mut self, uri: &DocumentUri) -> Box<dyn Unpin + Future<Output = bool>> {
         extern "C" {
             fn fsExistsAsync(promise_id: u32, path: *const u8, path_len: u32);
         }
 
-        if let Some(path) = path.as_ref().to_str() {
-            let promise_id = self.next_promise_id();
-            let (tx, rx) = mpsc::channel();
-            let waker_tx = self.waker_tx.clone();
-            self.exists_promises.insert(promise_id, tx);
-            unsafe { fsExistsAsync(promise_id, path.as_ptr(), path.len() as u32) };
-            Box::new(future::poll_fn(move |ctx| {
-                if let Ok(exists) = rx.try_recv() {
-                    println("@@@ notifyFsExistsAsyncResult: ready");
-                    Poll::Ready(exists)
-                } else {
-                    println("@@@ notifyFsExistsAsyncResult: pending");
-                    let _ = waker_tx.send(ctx.waker().clone());
-                    Poll::Pending
-                }
-            }))
-        } else {
-            Box::new(future::ready(false))
-        }
+        let uri = uri.to_string();
+        let promise_id = self.next_promise_id();
+        let (tx, rx) = mpsc::channel();
+        let waker_tx = self.waker_tx.clone();
+        self.exists_promises.insert(promise_id, tx);
+        unsafe { fsExistsAsync(promise_id, uri.as_ptr(), uri.len() as u32) };
+        Box::new(future::poll_fn(move |ctx| {
+            if let Ok(exists) = rx.try_recv() {
+                println("@@@ notifyFsExistsAsyncResult: ready");
+                Poll::Ready(exists)
+            } else {
+                println("@@@ notifyFsExistsAsyncResult: pending");
+                let _ = waker_tx.send(ctx.waker().clone());
+                Poll::Pending
+            }
+        }))
     }
 
-    fn read_file<P: AsRef<Path>>(
+    fn read_file(
         &mut self,
-        path: P,
+        uri: &DocumentUri,
     ) -> Box<dyn Unpin + Future<Output = orfail::Result<String>>> {
         extern "C" {
             fn fsReadFileAsync(promise_id: u32, path: *const u8, path_len: u32);
         }
 
-        match path.as_ref().to_str().or_fail() {
-            Err(e) => Box::new(future::ready(Err(e))),
-            Ok(path) => {
-                let promise_id = self.next_promise_id();
-                let (tx, rx) = mpsc::channel();
-                let waker_tx = self.waker_tx.clone();
-                self.read_file_promises.insert(promise_id, tx);
-                unsafe { fsReadFileAsync(promise_id, path.as_ptr(), path.len() as u32) };
-                Box::new(future::poll_fn(move |ctx| {
-                    println("@@@ polled");
-                    match rx.try_recv() {
-                        Err(TryRecvError::Empty) => {
-                            let _ = waker_tx.send(ctx.waker().clone());
-                            Poll::Pending
-                        }
-                        Err(TryRecvError::Disconnected) | Ok(None) => {
-                            Poll::Ready(Err(orfail::Failure::new("Failed to read file")))
-                        }
-                        Ok(Some(vec)) => {
-                            println(&format!(
-                                "@@@ notifyFsReadFileAsyncResult: ready: {} bytes",
-                                vec.len()
-                            ));
-                            Poll::Ready(String::from_utf8(vec).or_fail())
-                        }
-                    }
-                }))
+        let uri = uri.to_string();
+        let promise_id = self.next_promise_id();
+        let (tx, rx) = mpsc::channel();
+        let waker_tx = self.waker_tx.clone();
+        self.read_file_promises.insert(promise_id, tx);
+        unsafe { fsReadFileAsync(promise_id, uri.as_ptr(), uri.len() as u32) };
+        Box::new(future::poll_fn(move |ctx| {
+            println("@@@ polled");
+            match rx.try_recv() {
+                Err(TryRecvError::Empty) => {
+                    let _ = waker_tx.send(ctx.waker().clone());
+                    Poll::Pending
+                }
+                Err(TryRecvError::Disconnected) | Ok(None) => {
+                    Poll::Ready(Err(orfail::Failure::new("Failed to read file")))
+                }
+                Ok(Some(vec)) => {
+                    println(&format!(
+                        "@@@ notifyFsReadFileAsyncResult: ready: {} bytes",
+                        vec.len()
+                    ));
+                    Poll::Ready(String::from_utf8(vec).or_fail())
+                }
             }
-        }
+        }))
     }
 
-    fn read_sub_dirs<P: AsRef<Path>>(
+    fn read_sub_dirs(
         &mut self,
-        path: P,
-    ) -> Box<dyn Unpin + Future<Output = orfail::Result<Vec<PathBuf>>>> {
+        uri: &DocumentUri,
+    ) -> Box<dyn Unpin + Future<Output = orfail::Result<Vec<DocumentUri>>>> {
         extern "C" {
             fn fsReadSubDirsAsync(promise_id: u32, path: *const u8, path_len: u32);
         }
 
-        match path.as_ref().to_str().or_fail() {
-            Err(e) => Box::new(future::ready(Err(e))),
-            Ok(path) => {
-                let promise_id = self.next_promise_id();
-                let (tx, rx) = mpsc::channel();
-                let waker_tx = self.waker_tx.clone();
-                self.read_sub_dirs_promises.insert(promise_id, tx);
-                unsafe { fsReadSubDirsAsync(promise_id, path.as_ptr(), path.len() as u32) };
-                Box::new(future::poll_fn(move |ctx| match rx.try_recv() {
-                    Err(TryRecvError::Empty) => {
-                        let _ = waker_tx.send(ctx.waker().clone());
-                        Poll::Pending
-                    }
-                    Err(TryRecvError::Disconnected) | Ok(None) => {
-                        Poll::Ready(Err(orfail::Failure::new("Failed to read directory")))
-                    }
-                    Ok(Some(vec)) => Poll::Ready(serde_json::from_slice(&vec).or_fail()),
-                }))
+        let uri = uri.to_string();
+        let promise_id = self.next_promise_id();
+        let (tx, rx) = mpsc::channel();
+        let waker_tx = self.waker_tx.clone();
+        self.read_sub_dirs_promises.insert(promise_id, tx);
+        unsafe { fsReadSubDirsAsync(promise_id, uri.as_ptr(), uri.len() as u32) };
+        Box::new(future::poll_fn(move |ctx| match rx.try_recv() {
+            Err(TryRecvError::Empty) => {
+                let _ = waker_tx.send(ctx.waker().clone());
+                Poll::Pending
             }
-        }
+            Err(TryRecvError::Disconnected) | Ok(None) => {
+                Poll::Ready(Err(orfail::Failure::new("Failed to read directory")))
+            }
+            Ok(Some(vec)) => Poll::Ready(serde_json::from_slice(&vec).or_fail()),
+        }))
     }
 }
 

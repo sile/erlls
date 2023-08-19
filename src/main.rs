@@ -1,9 +1,9 @@
-use erlls_core::{config::Config, header::Header, server::LanguageServer};
+use erlls_core::{config::Config, header::Header, message::DocumentUri, server::LanguageServer};
 use orfail::OrFail;
 use std::{
     future::Future,
     io::{BufRead, Write},
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 fn main() -> orfail::Result<()> {
@@ -47,29 +47,34 @@ fn write_message<W: Write>(writer: &mut W, msg: &[u8]) -> orfail::Result<()> {
 struct FileSystem;
 
 impl erlls_core::fs::FileSystem for FileSystem {
-    fn exists<P: AsRef<Path>>(&mut self, path: P) -> Box<dyn Unpin + Future<Output = bool>> {
-        Box::new(std::future::ready(path.as_ref().exists()))
+    fn exists(&mut self, uri: &DocumentUri) -> Box<dyn Unpin + Future<Output = bool>> {
+        log::info!("exists: {}", uri.path().display());
+        Box::new(std::future::ready(uri.path().exists()))
     }
 
-    fn read_file<P: AsRef<Path>>(
+    fn read_file(
         &mut self,
-        path: P,
+        uri: &DocumentUri,
     ) -> Box<dyn Unpin + Future<Output = orfail::Result<String>>> {
-        let result = std::fs::read_to_string(&path)
-            .or_fail_with(|e| format!("{e}: {}", path.as_ref().display()));
+        log::info!("read_file: {}", uri.path().display());
+        let result = std::fs::read_to_string(uri.path())
+            .or_fail_with(|e| format!("{e}: {}", uri.path().display()));
         Box::new(std::future::ready(result))
     }
 
-    fn read_sub_dirs<P: AsRef<Path>>(
+    fn read_sub_dirs(
         &mut self,
-        path: P,
-    ) -> Box<dyn Unpin + Future<Output = orfail::Result<Vec<PathBuf>>>> {
+        uri: &DocumentUri,
+    ) -> Box<dyn Unpin + Future<Output = orfail::Result<Vec<DocumentUri>>>> {
+        log::info!("read_sub_dirs: {}", uri.path().display());
         let f = || {
             let mut dirs = Vec::new();
-            for entry in std::fs::read_dir(path).or_fail()? {
+            for entry in std::fs::read_dir(uri.path()).or_fail()? {
                 let entry = entry.or_fail()?;
                 if entry.file_type().or_fail()?.is_dir() {
-                    dirs.push(entry.path());
+                    if let Some(dir) = entry.path().to_str().and_then(|p| uri.join(p).ok()) {
+                        dirs.push(dir);
+                    }
                 }
             }
             Ok(dirs)
