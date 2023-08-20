@@ -119,33 +119,12 @@ impl DocumentUri {
     }
 
     pub fn join(&self, path: &str) -> orfail::Result<Self> {
-        // if self.path().ends_with("/") {
-        //     Ok(Self(self.0.join(path).or_fail()?))
-        // } else if self.path().extension().is_some() {
-        //     Ok(Self(self.0.join(path).or_fail()?))
-        // } else {
-        //     Ok(Self(self.0.join(&format!("/{path}")).or_fail()?))
-        // }
         Ok(Self(
             self.0
                 .join(self.path().join(path).to_str().or_fail()?)
                 .or_fail()?,
         ))
     }
-
-    // TODO
-    // pub fn from_path<P0: AsRef<Path>, P1: AsRef<Path>>(root: P0, path: P1) -> orfail::Result<Self> {
-    //     let url = if path.as_ref().is_absolute() {
-    //         url::Url::parse(&format!("file://{}", path.as_ref().to_str().or_fail()?)).or_fail()?
-    //     } else {
-    //         url::Url::parse(&format!(
-    //             "file://{}",
-    //             root.as_ref().join(path).to_str().or_fail()?
-    //         ))
-    //         .or_fail()?
-    //     };
-    //     Ok(Self(url))
-    // }
 
     pub fn parent(&self) -> orfail::Result<Self> {
         let path = self.path().to_path_buf().parent().or_fail()?.to_owned();
