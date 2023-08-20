@@ -1,15 +1,25 @@
 {
-  "name": "erllsweb",
-  "displayName": "erllsweb",
-  "description": "erlang language server",
-  "version": "0.0.1",
+  "name": "erlls",
+  "displayName": "ErlLS",
+  "publisher": "sile",
+  "license": "MIT",
+  "description": "Language Server for Erlang",
+  "version": "0.0.13",
+  "bugs": {
+    "url": "https://github.com/sile/erlls"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sile/erlls"
+  },
+  "homepage": "https://github.com/sile/erlls/blob/main/README.md",
+  "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.81.0"
   },
   "categories": [
-    "Other"
+    "Programming Languages"
   ],
-  "activationEvents": [],
   "browser": "./dist/web/extension.js",
   "activationEvents": [
     "onLanguage:erlang"
@@ -27,7 +37,8 @@
         ],
         "filenames": [
           "rebar.config"
-        ]
+        ],
+        "configuration": "./language-configuration.json"
       }
     ],
     "configuration": {
@@ -42,14 +53,9 @@
     }
   },
   "scripts": {
-    "test": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. --extensionTestsPath=dist/web/test/suite/index.js",
-    "pretest": "npm run compile-web",
     "vscode:prepublish": "npm run package-web",
     "compile-web": "webpack",
-    "watch-web": "webpack --watch",
-    "package-web": "webpack --mode production --devtool hidden-source-map",
-    "lint": "eslint src --ext ts",
-    "run-in-browser": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. ."
+    "package-web": "webpack --mode production --devtool hidden-source-map"
   },
   "dependencies": {
     "vscode-languageclient": "^8.1.0",
@@ -57,18 +63,11 @@
   },
   "devDependencies": {
     "@types/vscode": "^1.81.0",
-    "@types/mocha": "^10.0.1",
-    "eslint": "^8.41.0",
-    "@typescript-eslint/eslint-plugin": "^5.59.8",
-    "@typescript-eslint/parser": "^5.59.8",
-    "mocha": "^10.2.0",
     "typescript": "^5.1.3",
-    "@vscode/test-web": "^0.0.44",
     "ts-loader": "^9.4.3",
     "webpack": "^5.85.0",
     "webpack-cli": "^5.1.1",
     "@types/webpack-env": "^1.18.1",
-    "assert": "^2.0.0",
     "process": "^0.11.10"
   }
 }
