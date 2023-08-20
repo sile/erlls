@@ -4,5 +4,3 @@ target/
 /vscode/out/*
 !/vscode/out/erlls.wasm
 .log/
-
-
