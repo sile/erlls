@@ -9,7 +9,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const clientOptions: LanguageClientOptions = {
         documentSelector: [{ language: 'erlang' }]
     };
-    client = await createWorkerLanguageClient(context, clientOptions);
+    client = await createLanguageClient(context, clientOptions);
     await client.start();
     console.log('ErlLS server is ready.');
 }
@@ -22,14 +22,14 @@ export function deactivate() {
     return client.stop();
 }
 
-async function createWorkerLanguageClient(context: vscode.ExtensionContext, clientOptions: LanguageClientOptions): Promise<LanguageClient> {
+async function createLanguageClient(context: vscode.ExtensionContext, clientOptions: LanguageClientOptions): Promise<LanguageClient> {
     const wasmUri = vscode.Uri.joinPath(context.extensionUri, 'dist/web/erlls.wasm');
     const wasmBytes = await vscode.workspace.fs.readFile(wasmUri);
 
     const serverScriptUri = vscode.Uri.joinPath(context.extensionUri, 'dist/web/server.js');
     const serverScript = new TextDecoder().decode(await vscode.workspace.fs.readFile(serverScriptUri));
-    const webWorkerScriptObjectUrl = URL.createObjectURL(new Blob([serverScript], { type: 'application/javascript' }));
-    const worker = new Worker(webWorkerScriptObjectUrl);
+    const workerUrl = URL.createObjectURL(new Blob([serverScript], { type: 'application/javascript' }));
+    const worker = new Worker(workerUrl);
 
     const config = vscode.workspace.getConfiguration("erlls");
     const erlLibsString = config.get<string>("erlLibs", "");
