@@ -9,7 +9,7 @@ let wasmExports: WebAssembly.Exports | undefined;
 let serverPtr: number = 0;
 let poolPtr: number = 0;
 
-type Message = { data: { type: 'initialize', wasmBytes: ArrayBuffer, port: MessagePort } };
+type Message = { data: { type: 'initialize', wasmBytes: Uint8Array, port: MessagePort } };
 self.onmessage = async (msg: Message) => {
     if (msg.data.type !== 'initialize') {
         throw new Error('Unexpected message: ' + JSON.stringify(msg.data));
@@ -81,32 +81,32 @@ self.onmessage = async (msg: Message) => {
         connection.console.log(msg);
     }
 
-    function fsExistsAsync(promiseId: number, pathOffset: number, pathLen: number) {
+    function fsExistsAsync(promiseId: number, uriOffset: number, uriLen: number) {
         connection.console.log("fsExistsAsync");
         if (!wasmMemory || !wasmExports) {
             throw new Error("Unreachable");
         }
-        const path = new TextDecoder('utf-8').decode(new Uint8Array(wasmMemory.buffer, pathOffset, pathLen));
-        port.postMessage({ type: 'fsExists.call', promiseId, path });
+        const uri = new TextDecoder('utf-8').decode(new Uint8Array(wasmMemory.buffer, uriOffset, uriLen));
+        port.postMessage({ type: 'fsExists.call', promiseId, uri });
         connection.console.log("fsExistsAsync: sent");
     }
 
-    function fsReadFileAsync(promiseId: number, pathOffset: number, pathLen: number) {
+    function fsReadFileAsync(promiseId: number, uriOffset: number, uriLen: number) {
         connection.console.log("fsReadFileAsync");
         if (!wasmMemory || !wasmExports) {
             throw new Error("Unreachable");
         }
-        const path = new TextDecoder('utf-8').decode(new Uint8Array(wasmMemory.buffer, pathOffset, pathLen));
-        port.postMessage({ type: 'fsReadFile.call', promiseId, path });
+        const uri = new TextDecoder('utf-8').decode(new Uint8Array(wasmMemory.buffer, uriOffset, uriLen));
+        port.postMessage({ type: 'fsReadFile.call', promiseId, uri });
     }
 
-    function fsReadSubDirsAsync(promiseId: number, pathOffset: number, pathLen: number) {
+    function fsReadSubDirsAsync(promiseId: number, uriOffset: number, uriLen: number) {
         connection.console.log("fsReadSubDirsAsync");
         if (!wasmMemory || !wasmExports) {
             throw new Error("Unreachable");
         }
-        const path = new TextDecoder('utf-8').decode(new Uint8Array(wasmMemory.buffer, pathOffset, pathLen));
-        port.postMessage({ type: 'fsReadSubDirs.call', promiseId, path });
+        const uri = new TextDecoder('utf-8').decode(new Uint8Array(wasmMemory.buffer, uriOffset, uriLen));
+        port.postMessage({ type: 'fsReadSubDirs.call', promiseId, uri });
     }
 
     // TODO

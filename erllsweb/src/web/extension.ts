@@ -13,38 +13,20 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 async function createWorkerLanguageClient(context: vscode.ExtensionContext, clientOptions: LanguageClientOptions): Promise<LanguageClient> {
-
-    const channel = new MessageChannel();
     const wasmUri = vscode.Uri.joinPath(context.extensionUri, 'dist/web/erlls.wasm');
-    const wasmBytes = await (await fetch(wasmUri.toString(true),
-        // TODO: remove(?)
-        { mode: "cors" }
-    )).arrayBuffer();
-    console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+    const wasmBytes = await vscode.workspace.fs.readFile(wasmUri);
 
-    const serverMain = vscode.Uri.joinPath(context.extensionUri, 'dist/web/server.js');
-
-    const serverCode = new TextDecoder().decode(await vscode.workspace.fs.readFile(serverMain));
-    console.log(serverCode.slice(0, 100));
-    const webWorkerScriptObjectUrl = URL.createObjectURL(
-        new Blob([serverCode], { type: 'application/javascript' }),
-    );
+    const serverScriptUri = vscode.Uri.joinPath(context.extensionUri, 'dist/web/server.js');
+    const serverScript = new TextDecoder().decode(await vscode.workspace.fs.readFile(serverScriptUri));
+    const webWorkerScriptObjectUrl = URL.createObjectURL(new Blob([serverScript], { type: 'application/javascript' }));
     const worker = new Worker(webWorkerScriptObjectUrl);
 
-    // const worker = new Worker(serverMain.toString(true),
-    //     // TODO: remove
-    //     { credentials: 'omit' });
-    console.log("@--------@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-
-    worker.postMessage(
-        { 'type': 'initialize', wasmBytes, 'port': channel.port2 },
-        [wasmBytes, channel.port2]
-    );
+    const channel = new MessageChannel();
+    worker.postMessage({ type: 'initialize', wasmBytes, port: channel.port2 }, [wasmBytes.buffer, channel.port2]);
 
     const port = channel.port1;
     return new Promise((resolve, _reject) => {
         port.onmessage = (msg: PortMessage) => {
-            console.log('port.onmessage: ' + JSON.stringify(msg.data));
             switch (msg.data.type) {
                 case 'initialized':
                     resolve(new LanguageClient('erllsweb', 'ErlLS Web', clientOptions, worker));
@@ -59,27 +41,22 @@ async function createWorkerLanguageClient(context: vscode.ExtensionContext, clie
 type PortMessage = {
     data:
     { type: 'initialized' } |
-    { type: 'fsExists.call', promiseId: number, path: string } |
-    { type: 'fsReadFile.call', promiseId: number, path: string } |
-    { type: 'fsReadSubDirs.call', promiseId: number, path: string }
+    { type: 'fsExists.call', promiseId: number, uri: string } |
+    { type: 'fsReadFile.call', promiseId: number, uri: string } |
+    { type: 'fsReadSubDirs.call', promiseId: number, uri: string }
 };
 
 function handlePortMessage(port: MessagePort, msg: PortMessage) {
-    console.log('handlePortMessage: ' + JSON.stringify(msg.data));
     switch (msg.data.type) {
         case 'fsExists.call':
             {
-                const { promiseId, path } = msg.data; // TODO: s/path/uri/
-                const uri = vscode.Uri.parse(path);
+                const promiseId = msg.data.promiseId;
+                const uri = vscode.Uri.parse(msg.data.uri);
                 vscode.workspace.fs.stat(uri).then(
-                    (stat) => {
-                        console.log('path: ' + path);
-                        console.log('stat: ' + JSON.stringify(stat));
+                    (_stat) => {
                         port.postMessage({ type: 'fsExists.reply', promiseId, result: true })
                     },
-                    (reason) => {
-                        console.log('path: ' + path);
-                        console.log('reason: ' + JSON.stringify(reason));
+                    (_reason) => {
                         port.postMessage({ type: 'fsExists.reply', promiseId, result: false })
                     }
                 );
@@ -87,8 +64,8 @@ function handlePortMessage(port: MessagePort, msg: PortMessage) {
             break;
         case 'fsReadFile.call':
             {
-                const { promiseId, path } = msg.data; // TODO: s/path/uri/
-                const uri = vscode.Uri.parse(path);
+                const promiseId = msg.data.promiseId;
+                const uri = vscode.Uri.parse(msg.data.uri);
                 vscode.workspace.fs.readFile(uri).then(
                     (content) => {
                         port.postMessage({ type: 'fsReadFile.reply', promiseId, content }, [content.buffer]);
@@ -99,15 +76,10 @@ function handlePortMessage(port: MessagePort, msg: PortMessage) {
             break;
         case 'fsReadSubDirs.call':
             {
-                const { promiseId, path } = msg.data; // TODO: s/path/uri/
-                const parentDirUri = vscode.Uri.parse(path);
+                const promiseId = msg.data.promiseId;
+                const parentDirUri = vscode.Uri.parse(msg.data.uri);
                 vscode.workspace.fs.readDirectory(parentDirUri).then(
                     (entries) => {
-                        //const wasmUri = vscode.Uri.joinPath(context.extensionUri, 'dist/web/erlls.wasm');
-
-                        // TODO
-                        console.log('path: ' + path);
-                        console.log('entries: ' + JSON.stringify(entries));
                         const dirs = [];
                         for (const [name, type] of entries) {
                             if (type === vscode.FileType.Directory || type === vscode.FileType.SymbolicLink) {
@@ -115,7 +87,6 @@ function handlePortMessage(port: MessagePort, msg: PortMessage) {
                                 dirs.push(dir);
                             }
                         }
-                        console.log(dirs);
                         port.postMessage({ type: 'fsReadSubDirs.reply', promiseId, dirs });
                     },
                     () => port.postMessage({ type: 'fsReadSubDirs.reply', promiseId, dirs: [] }),
