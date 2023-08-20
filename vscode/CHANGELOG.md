@@ -6,6 +6,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.14] - 2023-08-20
+
 ### Added 
 
 - Support VSCode Web
