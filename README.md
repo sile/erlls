@@ -41,11 +41,25 @@ Editor integrations
 ErlLS can be used with any [LSP](https://microsoft.github.io/language-server-protocol/) clients. 
 Here are a few examples.
 
-### Visual Studio Code
+### Visual Studio Code / Visual Studio Code for the Web
 
 Please install [erlls extension](https://marketplace.visualstudio.com/items?itemName=sile.erlls).
 
 There is no need to install the `erlls` binary using the `$ cargo install` command as the extension already includes the WebAssembly build.
+
+#### Settings (`settings.json`)
+
+To include the Erlang/OTP applications in the search target, please specify the directory as follows:
+
+```json
+{
+    "erlls.erlLibs": "/usr/local/lib/erlang/lib/:_checkouts:_build/default/lib"
+}
+```
+
+NOTE:
+- The actual path may vary depending on the environment.
+- In VSCode Web, it's not possible to search applications located outside of the workspace.
 
 ### Emacs ([lsp-mode](https://github.com/emacs-lsp/lsp-mode))
 
