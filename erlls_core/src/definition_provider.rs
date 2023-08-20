@@ -12,7 +12,7 @@ use std::collections::HashSet;
 pub struct DefinitionProvider;
 
 impl DefinitionProvider {
-    pub fn handle_request<FS: FileSystem>(
+    pub async fn handle_request<FS: FileSystem>(
         &mut self,
         params: DefinitionParams,
         documents: &mut DocumentRepository<FS>,
@@ -44,11 +44,12 @@ impl DefinitionProvider {
                 module_name: Some(module_name),
                 ..
             } => {
-                target_uri = documents.resolve_module_uri(module_name).or_fail()?;
+                target_uri = documents.resolve_module_uri(module_name).await.or_fail()?;
             }
             Target::Include { include, .. } => {
                 return documents
                     .resolve_include_uri(&target_uri, include)
+                    .await
                     .map(|uri| Location::new(uri, Range::beginning()))
                     .and_then(|location| ResponseMessage::result(location).ok())
                     .ok_or_else(|| {
@@ -58,55 +59,53 @@ impl DefinitionProvider {
             _ => {}
         }
 
-        let location = Self::find_definition(
-            &target,
-            target_uri.clone(),
-            documents,
-            &mut HashSet::new(),
-            true,
-        )
-        .or_else(|_| {
-            Self::find_definition(&target, target_uri, documents, &mut HashSet::new(), false)
-        })
-        .or_fail()?;
+        let result = Self::find_definition(&target, target_uri.clone(), documents, true).await;
+        let location = if let Ok(location) = result {
+            location
+        } else {
+            Self::find_definition(&target, target_uri, documents, false)
+                .await
+                .or_fail()?
+        };
         log::debug!("location: {location:?}");
 
         let response = ResponseMessage::result(location).or_fail()?;
         Ok(response)
     }
 
-    fn find_definition<FS: FileSystem>(
+    async fn find_definition<FS: FileSystem>(
         target: &Target,
         target_uri: DocumentUri, // TODO: rename
-        documents: &DocumentRepository<FS>,
-        visited: &mut HashSet<DocumentUri>,
+        documents: &mut DocumentRepository<FS>,
         strict: bool,
     ) -> orfail::Result<Location> {
-        let text = documents.get_or_read_text(&target_uri).or_fail()?;
-        let tree = SyntaxTree::parse_as_much_as_possible(text).or_fail()?;
-        if let Some(range) = tree.find_definition(target, strict) {
-            Ok(Location::new(
-                target_uri,
-                Range::from_efmt_range(&tree.text(), range),
-            ))
-        } else {
-            visited.insert(target_uri.clone());
+        let mut visited: HashSet<DocumentUri> = HashSet::new();
+        visited.insert(target_uri.clone());
 
-            for include in tree.collect_includes() {
-                log::debug!("include: {include:?}");
-                if let Some(uri) = documents.resolve_include_uri(&target_uri, &include) {
-                    if visited.contains(&uri) {
-                        continue;
-                    }
-                    if let Ok(location) =
-                        Self::find_definition(target, uri, documents, visited, strict)
-                    {
-                        return Ok(location);
+        let mut stack = vec![target_uri.clone()];
+        while let Some(target_uri) = stack.pop() {
+            let text = documents.get_or_read_text(&target_uri).await.or_fail()?;
+            let tree = SyntaxTree::parse_as_much_as_possible(text).or_fail()?;
+            if let Some(range) = tree.find_definition(target, strict) {
+                return Ok(Location::new(
+                    target_uri,
+                    Range::from_efmt_range(&tree.text(), range),
+                ));
+            } else {
+                visited.insert(target_uri.clone());
+
+                for include in tree.collect_includes() {
+                    log::debug!("include: {include:?}");
+                    if let Some(uri) = documents.resolve_include_uri(&target_uri, &include).await {
+                        if visited.contains(&uri) {
+                            continue;
+                        }
+                        stack.push(uri);
                     }
                 }
             }
-
-            Err(orfail::Failure::new("No definitions found"))
         }
+
+        Err(orfail::Failure::new("No definitions found"))
     }
 }

@@ -15,21 +15,23 @@ pub struct DocumentRepository<FS> {
     config: Config,
     editings: HashMap<DocumentUri, Document>,
     module_uri_cache: HashMap<String, DocumentUri>,
-    _fs: std::marker::PhantomData<FS>,
+    fs: FS,
 }
 
-impl<FS> Default for DocumentRepository<FS> {
-    fn default() -> Self {
+impl<FS: FileSystem> DocumentRepository<FS> {
+    pub fn new(fs: FS) -> Self {
         Self {
             config: Config::default(),
             editings: HashMap::new(),
             module_uri_cache: HashMap::new(),
-            _fs: std::marker::PhantomData,
+            fs,
         }
     }
-}
 
-impl<FS: FileSystem> DocumentRepository<FS> {
+    pub fn fs_mut(&mut self) -> &mut FS {
+        &mut self.fs
+    }
+
     pub fn update_config(&mut self, config: Config) {
         self.config = config;
     }
@@ -38,20 +40,22 @@ impl<FS: FileSystem> DocumentRepository<FS> {
         self.editings.get(uri)
     }
 
-    pub fn get_or_read_text(&self, uri: &DocumentUri) -> orfail::Result<String> {
+    pub async fn get_or_read_text(&mut self, uri: &DocumentUri) -> orfail::Result<String> {
         if let Some(doc) = self.editings.get(uri) {
             Ok(doc.text.to_string())
         } else {
-            FS::read_file(uri.path()).or_fail()
+            self.fs.read_file(uri).await.or_fail()
         }
     }
 
-    pub fn resolve_include_uri(
-        &self,
+    pub async fn resolve_include_uri(
+        &mut self,
         current_uri: &DocumentUri,
         include: &Include,
     ) -> Option<DocumentUri> {
-        let current = current_uri.path().to_path_buf();
+        let parent = current_uri.parent().ok()?;
+        let grand_parent = parent.parent().ok()?;
+
         if include.is_lib {
             let mut include_path_components = include.path.components();
             let target_app_name = include_path_components.next().and_then(|x| {
@@ -62,8 +66,10 @@ impl<FS: FileSystem> DocumentRepository<FS> {
                 }
             })?;
             for lib_dir in &self.config.erl_libs {
-                for app_dir in FS::read_sub_dirs(lib_dir).ok().into_iter().flatten() {
-                    let app_name = app_dir
+                let lib_uri = self.config.root_uri.join(lib_dir.to_str()?).ok()?;
+                for app_dir_uri in self.fs.read_sub_dirs(&lib_uri).await {
+                    let app_name = app_dir_uri
+                        .path()
                         .file_name()
                         .and_then(|name| name.to_str())
                         .and_then(|namd_and_version| namd_and_version.split('-').next());
@@ -71,63 +77,71 @@ impl<FS: FileSystem> DocumentRepository<FS> {
                         continue;
                     }
 
-                    let path = app_dir.join(include_path_components.as_path());
-                    if FS::exists(&path) {
-                        return DocumentUri::from_path(&self.config.root_dir, path).ok();
+                    let uri = app_dir_uri
+                        .join(include_path_components.as_path().to_str()?)
+                        .ok()?;
+                    if self.fs.exists(&uri).await {
+                        return Some(uri);
                     }
                 }
             }
         } else {
-            let path = current.parent()?.join(&include.path);
-            if FS::exists(&path) {
-                return DocumentUri::from_path(&self.config.root_dir, path).ok();
+            let uri = parent.join(include.path.to_str()?).ok()?;
+            if self.fs.exists(&uri).await {
+                return Some(uri);
             }
 
-            let path = current
-                .parent()?
-                .parent()?
+            let uri = grand_parent
                 .join("include")
-                .join(&include.path);
-            if FS::exists(&path) {
-                return DocumentUri::from_path(&self.config.root_dir, path).ok();
+                .ok()?
+                .join(include.path.to_str()?)
+                .ok()?;
+            if self.fs.exists(&uri).await {
+                return Some(uri);
             }
         }
         None
     }
 
-    pub fn resolve_module_uri(&mut self, module_name: &str) -> orfail::Result<DocumentUri> {
+    pub async fn resolve_module_uri(&mut self, module_name: &str) -> orfail::Result<DocumentUri> {
         if let Some(uri) = self.module_uri_cache.get(module_name) {
             log::debug!("Module URI cache hit: module={}, uri={}", module_name, uri);
             return Ok(uri.clone());
         }
 
-        let path = self
+        let uri = self
             .config
-            .root_dir
-            .join(format!("src/{}.erl", module_name));
-        if FS::exists(&path) {
-            let uri = DocumentUri::from_path(&self.config.root_dir, path).or_fail()?;
+            .root_uri
+            .join(&format!("src/{}.erl", module_name))
+            .or_fail()?;
+        if self.fs.exists(&uri).await {
             self.module_uri_cache
                 .insert(module_name.to_string(), uri.clone());
             return Ok(uri);
         }
 
-        let path = self
+        let uri = self
             .config
-            .root_dir
-            .join(format!("test/{}.erl", module_name));
-        if FS::exists(&path) {
-            let uri = DocumentUri::from_path(&self.config.root_dir, path).or_fail()?;
+            .root_uri
+            .join(&format!("test/{}.erl", module_name))
+            .or_fail()?;
+        if self.fs.exists(&uri).await {
             self.module_uri_cache
                 .insert(module_name.to_string(), uri.clone());
             return Ok(uri);
         }
 
         for lib_dir in &self.config.erl_libs {
-            for app_dir in FS::read_sub_dirs(lib_dir).ok().into_iter().flatten() {
-                let path = app_dir.join(format!("src/{}.erl", module_name));
-                if FS::exists(&path) {
-                    let uri = DocumentUri::from_path(&self.config.root_dir, path).or_fail()?;
+            let lib_uri = self
+                .config
+                .root_uri
+                .join(lib_dir.to_str().or_fail()?)
+                .or_fail()?;
+            for app_dir_uri in self.fs.read_sub_dirs(&lib_uri).await {
+                let uri = app_dir_uri
+                    .join(&format!("src/{}.erl", module_name))
+                    .or_fail()?;
+                if self.fs.exists(&uri).await {
                     self.module_uri_cache
                         .insert(module_name.to_string(), uri.clone());
                     return Ok(uri);

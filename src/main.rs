@@ -1,36 +1,38 @@
-use erlls_core::{config::Config, header::Header, server::LanguageServer};
+use erlls_core::{config::Config, header::Header, message::DocumentUri, server::LanguageServer};
 use orfail::OrFail;
 use std::{
+    future::Future,
     io::{BufRead, Write},
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 fn main() -> orfail::Result<()> {
     env_logger::init();
 
     let config = create_config();
-    let mut server = LanguageServer::<FileSystem>::new(config);
+    let mut server = LanguageServer::<FileSystem>::new(config, FileSystem);
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
     let mut stdin = stdin.lock();
     let mut stdout = stdout.lock();
-    let mut buf = Vec::new();
     loop {
-        read_message(&mut stdin, &mut buf).or_fail()?;
+        let buf = read_message(&mut stdin).or_fail()?;
         log::debug!("Received JSON: {}", std::str::from_utf8(&buf).or_fail()?);
 
-        server.handle_incoming_message(&buf);
+        let future = server.handle_incoming_message(buf);
+        futures::executor::block_on(future);
+
         while let Some(msg) = server.take_outgoing_message() {
             write_message(&mut stdout, &msg).or_fail()?;
         }
     }
 }
 
-fn read_message<R: BufRead>(reader: &mut R, buf: &mut Vec<u8>) -> orfail::Result<()> {
+fn read_message<R: BufRead>(reader: &mut R) -> orfail::Result<Vec<u8>> {
     let header = Header::from_reader(reader).or_fail()?;
-    buf.resize(header.content_length, 0);
-    reader.read_exact(buf).or_fail()?;
-    Ok(())
+    let mut buf = vec![0; header.content_length];
+    reader.read_exact(&mut buf).or_fail()?;
+    Ok(buf)
 }
 
 fn write_message<W: Write>(writer: &mut W, msg: &[u8]) -> orfail::Result<()> {
@@ -45,23 +47,36 @@ fn write_message<W: Write>(writer: &mut W, msg: &[u8]) -> orfail::Result<()> {
 struct FileSystem;
 
 impl erlls_core::fs::FileSystem for FileSystem {
-    fn exists<P: AsRef<Path>>(path: P) -> bool {
-        path.as_ref().exists()
+    fn exists(&mut self, uri: &DocumentUri) -> Box<dyn Unpin + Future<Output = bool>> {
+        Box::new(std::future::ready(uri.path().exists()))
     }
 
-    fn read_file<P: AsRef<Path>>(path: P) -> orfail::Result<String> {
-        std::fs::read_to_string(&path).or_fail_with(|e| format!("{e}: {}", path.as_ref().display()))
+    fn read_file(
+        &mut self,
+        uri: &DocumentUri,
+    ) -> Box<dyn Unpin + Future<Output = orfail::Result<String>>> {
+        let result = std::fs::read_to_string(uri.path())
+            .or_fail_with(|e| format!("{e}: {}", uri.path().display()));
+        Box::new(std::future::ready(result))
     }
 
-    fn read_sub_dirs<P: AsRef<Path>>(path: P) -> orfail::Result<Vec<PathBuf>> {
+    fn read_sub_dirs(
+        &mut self,
+        uri: &DocumentUri,
+    ) -> Box<dyn Unpin + Future<Output = Vec<DocumentUri>>> {
         let mut dirs = Vec::new();
-        for entry in std::fs::read_dir(path).or_fail()? {
-            let entry = entry.or_fail()?;
-            if entry.file_type().or_fail()?.is_dir() {
-                dirs.push(entry.path());
+        for entry in std::fs::read_dir(uri.path()).ok().into_iter().flatten() {
+            let Ok(entry) = entry.or_fail() else {
+                continue;
+            };
+            if entry.file_type().map_or(true, |e| !e.is_dir()) {
+                continue;
+            }
+            if let Some(dir) = entry.path().to_str().and_then(|p| uri.join(p).ok()) {
+                dirs.push(dir);
             }
         }
-        Ok(dirs)
+        Box::new(std::future::ready(dirs))
     }
 }
 

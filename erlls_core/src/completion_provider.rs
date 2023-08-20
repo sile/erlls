@@ -12,7 +12,7 @@ use crate::{
 pub struct CompletionProvider;
 
 impl CompletionProvider {
-    pub fn handle_request<FS: FileSystem>(
+    pub async fn handle_request<FS: FileSystem>(
         &mut self,
         params: CompletionParams,
         documents: &mut DocumentRepository<FS>,
@@ -29,12 +29,12 @@ impl CompletionProvider {
         };
         log::debug!("target: {module:?}, {function:?}");
 
-        let Ok(module_uri) = documents.resolve_module_uri(&module) else {
+        let Ok(module_uri) = documents.resolve_module_uri(&module).await else {
             return Ok(ResponseMessage::null_result());
         };
         log::debug!("module_uri: {module_uri:?}");
 
-        let text = documents.get_or_read_text(&module_uri).or_fail()?;
+        let text = documents.get_or_read_text(&module_uri).await.or_fail()?;
         let Ok(tree) = SyntaxTree::parse_as_much_as_possible(text) else {
             return Ok(ResponseMessage::null_result());
         };

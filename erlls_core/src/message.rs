@@ -114,17 +114,21 @@ pub enum RequestId {
 pub struct DocumentUri(url::Url);
 
 impl DocumentUri {
-    pub fn from_path<P0: AsRef<Path>, P1: AsRef<Path>>(root: P0, path: P1) -> orfail::Result<Self> {
-        let url = if path.as_ref().is_absolute() {
-            url::Url::parse(&format!("file://{}", path.as_ref().to_str().or_fail()?)).or_fail()?
-        } else {
-            url::Url::parse(&format!(
-                "file://{}",
-                root.as_ref().join(path).to_str().or_fail()?
-            ))
-            .or_fail()?
-        };
-        Ok(Self(url))
+    pub fn default_dummyt_uri() -> Self {
+        Self(url::Url::parse("file:///").expect("unreachable"))
+    }
+
+    pub fn join(&self, path: &str) -> orfail::Result<Self> {
+        Ok(Self(
+            self.0
+                .join(self.path().join(path).to_str().or_fail()?)
+                .or_fail()?,
+        ))
+    }
+
+    pub fn parent(&self) -> orfail::Result<Self> {
+        let path = self.path().to_path_buf().parent().or_fail()?.to_owned();
+        self.join(path.to_str().or_fail()?).or_fail()
     }
 
     pub fn path(&self) -> &Path {
@@ -141,9 +145,28 @@ impl std::fmt::Display for DocumentUri {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InitializeParams {
-    pub root_uri: DocumentUri,
+    #[serde(default)]
+    pub root_uri: Option<DocumentUri>,
     pub client_info: Option<ClientInfo>,
     pub capabilities: ClientCapabilities,
+    #[serde(default)]
+    pub workspace_folders: Vec<WorkspaceFolder>,
+}
+
+impl InitializeParams {
+    pub fn root_uri(&self) -> orfail::Result<&DocumentUri> {
+        self.root_uri
+            .as_ref()
+            .or_else(|| self.workspace_folders.first().map(|f| &f.uri))
+            .or_fail_with(|()| "rootUri or workspaceFoldersa is required".to_owned())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceFolder {
+    pub uri: DocumentUri,
+    pub name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
