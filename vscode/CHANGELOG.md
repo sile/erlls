@@ -6,6 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.16] - 2023-08-20
+
+### Fixed
+
+- Include erlls.wasm in the extension package
+
 ## [0.0.15] - 2023-08-20
 
 ### Fixed
