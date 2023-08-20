@@ -6,9 +6,15 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.15] - 2023-08-20
+
+### Fixed
+
+- Update erlls.wasm as v0.0.14 included an old binary
+
 ## [0.0.14] - 2023-08-20
 
-### Added 
+### Added
 
 - Support VSCode Web
 - Add `erlls.erlLibs` setting
