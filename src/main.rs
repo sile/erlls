@@ -48,7 +48,6 @@ struct FileSystem;
 
 impl erlls_core::fs::FileSystem for FileSystem {
     fn exists(&mut self, uri: &DocumentUri) -> Box<dyn Unpin + Future<Output = bool>> {
-        log::info!("exists: {}", uri.path().display());
         Box::new(std::future::ready(uri.path().exists()))
     }
 
@@ -56,7 +55,6 @@ impl erlls_core::fs::FileSystem for FileSystem {
         &mut self,
         uri: &DocumentUri,
     ) -> Box<dyn Unpin + Future<Output = orfail::Result<String>>> {
-        log::info!("read_file: {}", uri.path().display());
         let result = std::fs::read_to_string(uri.path())
             .or_fail_with(|e| format!("{e}: {}", uri.path().display()));
         Box::new(std::future::ready(result))
@@ -65,21 +63,20 @@ impl erlls_core::fs::FileSystem for FileSystem {
     fn read_sub_dirs(
         &mut self,
         uri: &DocumentUri,
-    ) -> Box<dyn Unpin + Future<Output = orfail::Result<Vec<DocumentUri>>>> {
-        log::info!("read_sub_dirs: {}", uri.path().display());
-        let f = || {
-            let mut dirs = Vec::new();
-            for entry in std::fs::read_dir(uri.path()).or_fail()? {
-                let entry = entry.or_fail()?;
-                if entry.file_type().or_fail()?.is_dir() {
-                    if let Some(dir) = entry.path().to_str().and_then(|p| uri.join(p).ok()) {
-                        dirs.push(dir);
-                    }
-                }
+    ) -> Box<dyn Unpin + Future<Output = Vec<DocumentUri>>> {
+        let mut dirs = Vec::new();
+        for entry in std::fs::read_dir(uri.path()).ok().into_iter().flatten() {
+            let Ok(entry) = entry.or_fail() else {
+                continue;
+            };
+            if entry.file_type().map_or(true, |e| !e.is_dir()) {
+                continue;
             }
-            Ok(dirs)
-        };
-        Box::new(std::future::ready(f()))
+            if let Some(dir) = entry.path().to_str().and_then(|p| uri.join(p).ok()) {
+                dirs.push(dir);
+            }
+        }
+        Box::new(std::future::ready(dirs))
     }
 }
 

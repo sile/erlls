@@ -180,7 +180,7 @@ impl erlls_core::fs::FileSystem for FileSystem {
     fn read_sub_dirs(
         &mut self,
         uri: &DocumentUri,
-    ) -> Box<dyn Unpin + Future<Output = orfail::Result<Vec<DocumentUri>>>> {
+    ) -> Box<dyn Unpin + Future<Output = Vec<DocumentUri>>> {
         extern "C" {
             fn fsReadSubDirsAsync(promise_id: u32, path: *const u8, path_len: u32);
         }
@@ -196,10 +196,8 @@ impl erlls_core::fs::FileSystem for FileSystem {
                 let _ = waker_tx.send(ctx.waker().clone());
                 Poll::Pending
             }
-            Err(TryRecvError::Disconnected) | Ok(None) => {
-                Poll::Ready(Err(orfail::Failure::new("Failed to read directory")))
-            }
-            Ok(Some(vec)) => Poll::Ready(serde_json::from_slice(&vec).or_fail()),
+            Err(TryRecvError::Disconnected) | Ok(None) => Poll::Ready(Vec::new()),
+            Ok(Some(vec)) => Poll::Ready(serde_json::from_slice(&vec).unwrap_or_default()),
         }))
     }
 }

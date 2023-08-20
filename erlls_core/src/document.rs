@@ -67,14 +67,7 @@ impl<FS: FileSystem> DocumentRepository<FS> {
             })?;
             for lib_dir in &self.config.erl_libs {
                 let lib_uri = self.config.root_uri.join(lib_dir.to_str()?).ok()?;
-                for app_dir_uri in self
-                    .fs
-                    .read_sub_dirs(&lib_uri)
-                    .await
-                    .ok()
-                    .into_iter()
-                    .flatten()
-                {
+                for app_dir_uri in self.fs.read_sub_dirs(&lib_uri).await {
                     let app_name = app_dir_uri
                         .path()
                         .file_name()
@@ -144,14 +137,7 @@ impl<FS: FileSystem> DocumentRepository<FS> {
                 .root_uri
                 .join(lib_dir.to_str().or_fail()?)
                 .or_fail()?;
-            for app_dir_uri in self
-                .fs
-                .read_sub_dirs(&lib_uri)
-                .await
-                .ok()
-                .into_iter()
-                .flatten()
-            {
+            for app_dir_uri in self.fs.read_sub_dirs(&lib_uri).await {
                 let uri = app_dir_uri
                     .join(&format!("src/{}.erl", module_name))
                     .or_fail()?;

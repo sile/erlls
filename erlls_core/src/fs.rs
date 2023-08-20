@@ -12,5 +12,5 @@ pub trait FileSystem {
     fn read_sub_dirs(
         &mut self,
         uri: &DocumentUri,
-    ) -> Box<dyn Unpin + Future<Output = orfail::Result<Vec<DocumentUri>>>>;
+    ) -> Box<dyn Unpin + Future<Output = Vec<DocumentUri>>>;
 }
