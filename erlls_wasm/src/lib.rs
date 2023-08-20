@@ -35,7 +35,7 @@ pub struct FileSystem {
 
 impl FileSystem {
     fn next_promise_id(&mut self) -> u32 {
-        self.promise_id += 1;
+        self.promise_id = self.promise_id.wrapping_add(1);
         self.promise_id
     }
 }
@@ -60,7 +60,6 @@ pub fn notifyFsExistsAsyncResult(
     promise_id: u32,
     exists: bool,
 ) {
-    println("@@@ notifyFsExistsAsyncResult");
     let server = unsafe { &mut *server };
     let _ = server
         .fs_mut()
@@ -81,7 +80,6 @@ pub fn notifyFsReadFileAsyncResult(
     promise_id: u32,
     vec_ptr: *mut Vec<u8>,
 ) {
-    println("@@@ notifyFsReadFileAsyncResult");
     let vec = unsafe { (!vec_ptr.is_null()).then(|| *Box::from_raw(vec_ptr)) };
     let server = unsafe { &mut *server };
     let _ = server
@@ -132,10 +130,8 @@ impl erlls_core::fs::FileSystem for FileSystem {
         unsafe { fsExistsAsync(promise_id, uri.as_ptr(), uri.len() as u32) };
         Box::new(future::poll_fn(move |ctx| {
             if let Ok(exists) = rx.try_recv() {
-                println("@@@ notifyFsExistsAsyncResult: ready");
                 Poll::Ready(exists)
             } else {
-                println("@@@ notifyFsExistsAsyncResult: pending");
                 let _ = waker_tx.send(ctx.waker().clone());
                 Poll::Pending
             }
@@ -156,24 +152,15 @@ impl erlls_core::fs::FileSystem for FileSystem {
         let waker_tx = self.waker_tx.clone();
         self.read_file_promises.insert(promise_id, tx);
         unsafe { fsReadFileAsync(promise_id, uri.as_ptr(), uri.len() as u32) };
-        Box::new(future::poll_fn(move |ctx| {
-            println("@@@ polled");
-            match rx.try_recv() {
-                Err(TryRecvError::Empty) => {
-                    let _ = waker_tx.send(ctx.waker().clone());
-                    Poll::Pending
-                }
-                Err(TryRecvError::Disconnected) | Ok(None) => {
-                    Poll::Ready(Err(orfail::Failure::new("Failed to read file")))
-                }
-                Ok(Some(vec)) => {
-                    println(&format!(
-                        "@@@ notifyFsReadFileAsyncResult: ready: {} bytes",
-                        vec.len()
-                    ));
-                    Poll::Ready(String::from_utf8(vec).or_fail())
-                }
+        Box::new(future::poll_fn(move |ctx| match rx.try_recv() {
+            Err(TryRecvError::Empty) => {
+                let _ = waker_tx.send(ctx.waker().clone());
+                Poll::Pending
             }
+            Err(TryRecvError::Disconnected) | Ok(None) => {
+                Poll::Ready(Err(orfail::Failure::new("Failed to read file")))
+            }
+            Ok(Some(vec)) => Poll::Ready(String::from_utf8(vec).or_fail()),
         }))
     }
 
@@ -275,21 +262,9 @@ pub fn handleIncomingMessage(
         let pool = &mut *pool;
         let server = &mut *server;
         let message = *Box::from_raw(message_ptr);
-        println("[BEFORE] handleIncomingMessage");
-        match String::from_utf8(message.clone()) {
-            Ok(m) => {
-                println(
-                    &serde_json::from_str::<serde_json::Value>(&m)
-                        .is_ok()
-                        .to_string(),
-                );
-            }
-            Err(e) => println(&e.to_string()),
-        }
         pool.spawner()
             .spawn_local(server.handle_incoming_message(message))
             .expect("unreachable");
-        println("[AFTER] handleIncomingMessage");
     }
 }
 
