@@ -6,6 +6,15 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Added 
+
+- Support VSCode Web
+- Add `erlls.erlLibs` setting
+
+### Changed
+
+- Remove `erlls.enableCompletion` setting
+
 ## [0.0.13] - 2023-08-15
 
 ### Fixed
