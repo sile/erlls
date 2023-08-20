@@ -1,6 +1,3 @@
 target/
 **/*.rs.bk
-/vscode/node_modules/
-/vscode/out/*
-!/vscode/out/erlls.wasm
 .log/
