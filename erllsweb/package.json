@@ -29,7 +29,17 @@
           "rebar.config"
         ]
       }
-    ]
+    ],
+    "configuration": {
+      "title": "ErlLS",
+      "properties": {
+        "erlls.erlLibs": {
+          "type": "string",
+          "default": "_checkouts:_build/default/lib",
+          "description": "Erlang library directories, separated by ':'"
+        }
+      }
+    }
   },
   "scripts": {
     "test": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. --extensionTestsPath=dist/web/test/suite/index.js",

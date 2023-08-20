@@ -2,14 +2,24 @@ import * as vscode from 'vscode';
 import { LanguageClientOptions } from 'vscode-languageclient';
 import { LanguageClient } from 'vscode-languageclient/browser';
 
+let client: LanguageClient;
+
 export async function activate(context: vscode.ExtensionContext) {
     console.log('ErlLS is activated.');
     const clientOptions: LanguageClientOptions = {
         documentSelector: [{ language: 'erlang' }]
     };
-    const client = await createWorkerLanguageClient(context, clientOptions);
+    client = await createWorkerLanguageClient(context, clientOptions);
     await client.start();
     console.log('ErlLS server is ready.');
+}
+
+export function deactivate() {
+    if (!client) {
+        return undefined;
+    }
+    console.log('ErlLS is deactivated.');
+    return client.stop();
 }
 
 async function createWorkerLanguageClient(context: vscode.ExtensionContext, clientOptions: LanguageClientOptions): Promise<LanguageClient> {
@@ -21,15 +31,24 @@ async function createWorkerLanguageClient(context: vscode.ExtensionContext, clie
     const webWorkerScriptObjectUrl = URL.createObjectURL(new Blob([serverScript], { type: 'application/javascript' }));
     const worker = new Worker(webWorkerScriptObjectUrl);
 
+    const config = vscode.workspace.getConfiguration("erlls");
+    const erlLibsString = config.get<string>("erlLibs", "");
+    let erlLibs: string[] = [];
+    if (erlLibsString !== "") {
+        erlLibs = erlLibsString.split(":");
+    }
+
     const channel = new MessageChannel();
-    worker.postMessage({ type: 'initialize', wasmBytes, port: channel.port2 }, [wasmBytes.buffer, channel.port2]);
+    worker.postMessage(
+        { type: 'initialize', wasmBytes, port: channel.port2, erlLibs },
+        [wasmBytes.buffer, channel.port2]);
 
     const port = channel.port1;
     return new Promise((resolve, _reject) => {
         port.onmessage = (msg: PortMessage) => {
             switch (msg.data.type) {
                 case 'initialized':
-                    resolve(new LanguageClient('erllsweb', 'ErlLS Web', clientOptions, worker));
+                    resolve(new LanguageClient('erlls', 'ErlLS', clientOptions, worker));
                     break
                 default:
                     handlePortMessage(port, msg);

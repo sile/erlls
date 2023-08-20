@@ -1,15 +1,12 @@
 import { createConnection, BrowserMessageReader, BrowserMessageWriter } from 'vscode-languageserver/browser';
 import { InitializeParams, InitializeResult, ServerCapabilities } from 'vscode-languageserver';
 
-// TODO
-const erlLibs = ["/usr/local/lib/erlang/lib", "_checkouts", "_build/default/lib"];
-
 let wasmMemory: WebAssembly.Memory | undefined;
 let wasmExports: WebAssembly.Exports | undefined;
 let serverPtr: number = 0;
 let poolPtr: number = 0;
 
-type Message = { data: { type: 'initialize', wasmBytes: Uint8Array, port: MessagePort } };
+type Message = { data: { type: 'initialize', wasmBytes: Uint8Array, port: MessagePort, erlLibs: string[] } };
 self.onmessage = async (msg: Message) => {
     if (msg.data.type !== 'initialize') {
         throw new Error('Unexpected message: ' + JSON.stringify(msg.data));
@@ -127,7 +124,7 @@ self.onmessage = async (msg: Message) => {
     serverPtr = (wasmExports.newServer as CallableFunction)();
     poolPtr = (wasmExports.newLocalPool as CallableFunction)();
 
-    const config = { erlLibs };
+    const config = { erlLibs: msg.data.erlLibs };
     const configJsonBytes = new TextEncoder().encode(JSON.stringify(config));
     const wasmConfigPtr =
         (wasmExports.allocateVec as CallableFunction)(configJsonBytes.length);
@@ -240,5 +237,6 @@ self.onmessage = async (msg: Message) => {
 
 
     connection.console.log("ErlLS server started");
+    connection.console.log("config: " + JSON.stringify(config));
     connection.listen();
 }
