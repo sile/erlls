@@ -24,8 +24,9 @@
         {
             "beforeText": "^(?!.*->).*;\\s*$",
             "action": { "indent": "outdent" }
-        },        {
-        "beforeText": "^.*\\.\\s*$",
+        },
+        {
+            "beforeText": "^[^%]*\\.\\s*$",
             "action": { "indent": "outdent" }
         }
     ],

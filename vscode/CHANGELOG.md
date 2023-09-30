@@ -6,6 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.17] - 2023-09-30
+
+### Fixed
+
+- Don't apply `"action": { "indent": "outdent" }` if the trailing `.` is commented out
+
 ## [0.0.16] - 2023-08-20
 
 ### Fixed
