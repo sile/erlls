@@ -33,7 +33,8 @@
         ],
         "extensions": [
           ".erl",
-          ".hrl"
+          ".hrl",
+          ".app.src"
         ],
         "filenames": [
           "rebar.config"
