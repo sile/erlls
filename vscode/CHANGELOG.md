@@ -6,6 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.18] - 2023-10-22
+
+### Added
+
+- Recognize *.app.src as Erlang files
+
 ## [0.0.17] - 2023-09-30
 
 ### Fixed
