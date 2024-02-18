@@ -1061,8 +1061,12 @@ impl FindTarget for efmt_core::items::expressions::LiteralExpr {
                     });
                 }
             }
-            Self::Atom(_) | Self::Char(_) | Self::Float(_) | Self::Integer(_) | Self::String(_) => {
-            }
+            Self::Atom(_)
+            | Self::Char(_)
+            | Self::Float(_)
+            | Self::Integer(_)
+            | Self::String(_)
+            | Self::SigilString(_) => {}
         }
         None
     }

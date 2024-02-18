@@ -127,7 +127,9 @@ impl Highlighter {
             erl_tokenize::Token::Keyword(token) => {
                 self.handle_keyword_token(token);
             }
-            erl_tokenize::Token::Char(_) | erl_tokenize::Token::String(_) => {
+            erl_tokenize::Token::Char(_)
+            | erl_tokenize::Token::String(_)
+            | erl_tokenize::Token::SigilString(_) => {
                 self.add_semantic_token(&token, SemanticTokenType::String);
             }
             erl_tokenize::Token::Symbol(token) => self.handle_symbol_token(token),
