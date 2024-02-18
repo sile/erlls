@@ -13,7 +13,7 @@ exclude = ["/vscode/"]
 
 [dependencies]
 erlls_core = { version = "0.0", path = "erlls_core/" }
-env_logger = "0.10.0"
+env_logger = "0.11"
 log = { version = "0.4.19", features = ["release_max_level_debug"] }
 orfail = { version = "1", features = ["serde"] }
 futures = { version = "0.3.28", features = ["executor"] }
