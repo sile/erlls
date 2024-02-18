@@ -12,8 +12,8 @@ readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-efmt_core = "0.1.0"
-erl_tokenize = "0.5.0"
+efmt_core = "0.2"
+erl_tokenize = "0.6"
 log = { version = "0.4.19", features = ["release_max_level_debug"] }
 orfail = { version = "1", features = ["serde"] }
 serde = { version = "1.0.164", features = ["derive"] }

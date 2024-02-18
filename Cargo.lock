@@ -73,9 +73,9 @@ checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
 name = "efmt_core"
-version = "0.1.4"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fd17c8530ca3c86501b75169a20b2c58f1cb5d1611e308226c44a2185d6aea4"
+checksum = "b9c6cc84f39c14b18e80fd9cc0f92de17ddf83f61ee1c4e92ed4dec952a9cf41"
 dependencies = [
  "efmt_derive",
  "erl_tokenize",
@@ -119,9 +119,9 @@ dependencies = [
 
 [[package]]
 name = "erl_tokenize"
-version = "0.5.1"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2146a64debc5e560a78a4936443925ca052de20b43e02fdc1504b655a8cd932"
+checksum = "c83661c583875d5f3fd5a0196a358518341f449cb835642ed409f23c4c9dd58b"
 dependencies = [
  "num",
  "serde",
