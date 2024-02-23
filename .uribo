@@ -1,0 +1,14 @@
+{
+  "wasm": {
+    "command": "cargo",
+    "args": [
+      "build",
+      "--manifest-path",
+      "erlls_wasm/Cargo.toml",
+      "--release",
+      "--target",
+      "wasm32-unknown-unknown"
+    ],
+    "working_dir": "."
+  }
+}
