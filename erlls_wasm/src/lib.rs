@@ -21,6 +21,10 @@ extern "C" {
 struct ConfigDelta {
     #[serde(default)]
     pub erl_libs: Option<Vec<PathBuf>>,
+
+    /// "OFF" | "ERROR" | "WARN" | "INFO" | "DEBUG" | "TRACE"
+    #[serde(default)]
+    pub log_level: Option<log::LevelFilter>,
 }
 
 #[derive(Debug)]
@@ -243,6 +247,15 @@ pub fn updateConfig(server: *mut LanguageServer<FileSystem>, config_json_ptr: *m
         let Ok(config_delta) = serde_json::from_slice::<ConfigDelta>(&config_delta_json) else {
             return;
         };
+
+        if let Some(level) = config_delta.log_level {
+            if level != log::LevelFilter::Off {
+                log::set_logger(&LOGGER)
+                    .map(|()| log::set_max_level(level))
+                    .expect("unreachable");
+            }
+        }
+
         let server = &mut *server;
         let mut config = server.config().clone();
         if let Some(v) = config_delta.erl_libs {
@@ -278,4 +291,29 @@ pub fn takeOutgoingMessage(server: *mut LanguageServer<FileSystem>) -> *mut Vec<
             std::ptr::null_mut()
         }
     }
+}
+
+static LOGGER: ConsoleLogger = ConsoleLogger;
+
+struct ConsoleLogger;
+
+impl log::Log for ConsoleLogger {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= log::Level::Debug
+    }
+
+    fn log(&self, record: &log::Record) {
+        if self.enabled(record.metadata()) {
+            println(&format!(
+                "[{}] {} [{}:{}] {}",
+                record.level(),
+                record.target(),
+                record.module_path().unwrap_or_default(),
+                record.line().unwrap_or_default(),
+                record.args()
+            ));
+        }
+    }
+
+    fn flush(&self) {}
 }

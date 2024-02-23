@@ -4,7 +4,7 @@ import { InitializeResult } from 'vscode-languageserver';
 let globalWasmMemory: WebAssembly.Memory = new WebAssembly.Memory({ initial: 1 }); // dummy value (unused)
 
 type InitializeMessage =
-    { data: { type: 'initialize', wasmBytes: Uint8Array, port: MessagePort, erlLibs: string[] } };
+    { data: { type: 'initialize', wasmBytes: Uint8Array, port: MessagePort, erlLibs: string[], logLevel: string } };
 
 self.onmessage = async (msg: InitializeMessage) => {
     if (msg.data.type !== 'initialize') {
@@ -26,7 +26,7 @@ self.onmessage = async (msg: InitializeMessage) => {
     const poolPtr = (wasmExports.newLocalPool as CallableFunction)();
     port.onmessage = (m) => handleFsMessage(m, serverPtr, wasmMemory, wasmExports);
 
-    const config = { erlLibs: msg.data.erlLibs };
+    const config = { erlLibs: msg.data.erlLibs, logLevel: msg.data.logLevel };
     const configJsonBytes = new TextEncoder().encode(JSON.stringify(config));
     const wasmConfigPtr =
         (wasmExports.allocateVec as CallableFunction)(configJsonBytes.length);

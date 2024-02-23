@@ -38,9 +38,11 @@ async function createLanguageClient(context: vscode.ExtensionContext, clientOpti
         erlLibs = erlLibsString.split(":");
     }
 
+    const logLevel = config.get<string>("logLevel", "OFF");
+
     const channel = new MessageChannel();
     worker.postMessage(
-        { type: 'initialize', wasmBytes, port: channel.port2, erlLibs },
+        { type: 'initialize', wasmBytes, port: channel.port2, erlLibs, logLevel },
         [wasmBytes.buffer, channel.port2]);
 
     const port = channel.port1;

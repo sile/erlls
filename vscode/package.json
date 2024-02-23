@@ -49,6 +49,19 @@
           "type": "string",
           "default": "_checkouts:_build/default/lib",
           "description": "Erlang library directories, separated by ':'"
+        },
+        "erlls.logLevel": {
+          "type": "string",
+          "default": "OFF",
+          "enum": [
+            "OFF",
+            "ERROR",
+            "WARN",
+            "INFO",
+            "DEBUG",
+            "TRACE"
+          ],
+          "description": "Log level"
         }
       }
     }
