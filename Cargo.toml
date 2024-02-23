@@ -1,9 +1,9 @@
 [package]
 name = "erlls"
-version = "0.0.12"
+version = "0.0.19"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-description = "Erlang language server"
+Ndescription = "Erlang language server"
 homepage = "https://github.com/sile/erlls"
 repository = "https://github.com/sile/erlls"
 readme = "README.md"

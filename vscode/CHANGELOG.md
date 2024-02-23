@@ -6,6 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.19] - 2024-02-23
+
+### Added
+
+- Add support for OTP 27.0-rc1 (triple-quoted strings and sigil string literals)
+
 ## [0.0.18] - 2023-10-22
 
 ### Added
