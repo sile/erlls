@@ -6,6 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.20] - 2024-02-23
+
+### Added
+
+- Add logLevel setting
+
 ## [0.0.19] - 2024-02-23
 
 ### Added
