@@ -6,6 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.22] - 2024-02-25
+
+### Fixed
+
+- Change the type of DidCloseTextDocumentParams.text_document from TextDocumentItem to TextDocumentIdentifier
+
 ## [0.0.21] - 2024-02-25
 
 ### Fixed
