@@ -361,6 +361,7 @@ pub struct DidCloseTextDocumentParams {
 #[serde(rename_all = "camelCase")]
 pub struct TextDocumentItem {
     pub uri: DocumentUri,
+    #[serde(default)]
     pub language_id: String,
     pub version: i32,
     pub text: String,
