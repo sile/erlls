@@ -6,6 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.21] - 2024-02-25
+
+### Fixed
+
+- Make TextDocumentItem.language_id optional to fix a warning that occurs when handling a textDocument/didClose notification from VSCode.
+
 ## [0.0.20] - 2024-02-23
 
 ### Added
