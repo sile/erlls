@@ -6,6 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.23] - 2024-03-02
+
+### Fixed
+
+- Serialize LSP message handling to avoid potential race conditions
+
 ## [0.0.22] - 2024-02-25
 
 ### Fixed
