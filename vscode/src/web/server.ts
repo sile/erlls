@@ -36,9 +36,20 @@ self.onmessage = async (msg: InitializeMessage) => {
     (wasmExports.updateConfig as CallableFunction)(serverPtr, wasmConfigPtr);
     port.postMessage({ type: 'initialized' });
 
+
+    var isProcessingIncomingMessage = false;
+    let incomingMessageWaitQueue: (() => void)[] = [];
+
     async function handleIncomingMessage(
         message: object
     ): Promise<any[] | object | undefined> {
+        if (isProcessingIncomingMessage) {
+            await new Promise((resolve, _reject) => {
+                incomingMessageWaitQueue.push(() => resolve(undefined));
+            });
+        }
+        isProcessingIncomingMessage = true;
+
         const messageJsonBytes = new TextEncoder().encode(JSON.stringify(message));
 
         const wasmMessagePtr =
@@ -84,6 +95,12 @@ self.onmessage = async (msg: InitializeMessage) => {
         }
 
         resolve(resultParams);
+
+        isProcessingIncomingMessage = false;
+        const wakeUp = incomingMessageWaitQueue.shift();
+        if (wakeUp !== undefined) {
+            wakeUp();
+        }
     }
 
     connection.onInitialize(async (params) => {
