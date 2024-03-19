@@ -6,6 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.24] - 2024-03-19
+
+### Fixed
+
+- Fix potential race condition
+
 ## [0.0.23] - 2024-03-02
 
 ### Fixed

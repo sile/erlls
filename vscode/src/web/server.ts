@@ -96,10 +96,11 @@ self.onmessage = async (msg: InitializeMessage) => {
 
         resolve(resultParams);
 
-        isProcessingIncomingMessage = false;
         const wakeUp = incomingMessageWaitQueue.shift();
         if (wakeUp !== undefined) {
             wakeUp();
+        } else {
+            isProcessingIncomingMessage = false;
         }
     }
 
