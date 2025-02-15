@@ -45,10 +45,10 @@ impl CompletionProvider {
                 .name
                 .chars()
                 .next()
-                .map_or(true, |c| !c.is_ascii_alphabetic())
+                .is_some_and(|c| !c.is_ascii_alphabetic())
                 || function
                     .as_ref()
-                    .map_or(false, |x| !export.name.starts_with(x))
+                    .is_some_and(|x| !export.name.starts_with(x))
             {
                 continue;
             }

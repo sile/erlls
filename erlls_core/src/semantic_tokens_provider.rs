@@ -308,9 +308,10 @@ impl Highlighter {
         }
 
         if self.is_symbol_eq(0, Symbol::Dot)
-            && self.prev_tokens.back().map_or(false, |t| {
-                t.end_position().line() == token.start_position().line()
-            })
+            && self
+                .prev_tokens
+                .back()
+                .is_some_and(|t| t.end_position().line() == token.start_position().line())
         {
             self.add_semantic_token(token, SemanticTokenType::Property);
         }
@@ -322,7 +323,7 @@ impl Highlighter {
             .rev()
             .nth(prev_n)
             .and_then(|token| token.as_symbol_token())
-            .map_or(false, |token| token.value() == symbol)
+            .is_some_and(|token| token.value() == symbol)
     }
 
     fn is_atom_eq(&self, prev_n: usize, atom: &str) -> bool {
@@ -331,7 +332,7 @@ impl Highlighter {
             .rev()
             .nth(prev_n)
             .and_then(|token| token.as_atom_token())
-            .map_or(false, |token| token.value() == atom)
+            .is_some_and(|token| token.value() == atom)
     }
 }
 
