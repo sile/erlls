@@ -10,6 +10,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 - Change the type of DidCloseTextDocumentParams.text_document from TextDocumentItem to TextDocumentIdentifier
 
+## [0.0.15] - 2025-02-15
+
+### Added
+
+- Add support for OTP 28.0-rc1
+
 ## [0.0.19] - 2024-02-23
 
 ### Added

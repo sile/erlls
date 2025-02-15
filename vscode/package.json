@@ -4,7 +4,7 @@
   "publisher": "sile",
   "license": "MIT",
   "description": "Language Server for Erlang",
-  "version": "0.0.24",
+  "version": "0.0.25",
   "bugs": {
     "url": "https://github.com/sile/erlls"
   },
