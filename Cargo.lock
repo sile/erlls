@@ -86,9 +86,9 @@ dependencies = [
 
 [[package]]
 name = "efmt_core"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25797c95e3878ad54884882260f5d71504326e6a0bea608487396726db5cb847"
+checksum = "9f573cad6ff4a942980486542975e3ee10ec327946a02f897eefc26d3501f5ab"
 dependencies = [
  "efmt_derive",
  "erl_tokenize",

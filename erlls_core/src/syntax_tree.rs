@@ -1,5 +1,9 @@
-use efmt_core::{items::Macro, parse::TokenStream, span::Position, span::Span};
-use erl_tokenize::{values::Symbol, Tokenizer};
+use efmt_core::{
+    items::Macro,
+    parse::{TokenOrShebang, TokenStream, Tokenizer},
+    span::{Position, Span},
+};
+use erl_tokenize::values::Symbol;
 use orfail::OrFail;
 use std::{path::PathBuf, sync::Arc};
 
@@ -78,6 +82,10 @@ impl SyntaxTree {
         let mut passed = false;
         for token in tokenizer {
             let token = token.or_fail()?;
+            let TokenOrShebang::Token(token) = token else {
+                continue;
+            };
+
             if !token.is_lexical_token() {
                 continue;
             }
@@ -309,6 +317,7 @@ impl FindTarget for efmt_core::items::forms::Form {
             Self::Export(x) => x.find_target_if_contains(text, position),
             Self::Attr(x) => x.find_target_if_contains(text, position),
             Self::Include(x) => x.find_target_if_contains(text, position),
+            Self::Doc(x) => x.find_target_if_contains(text, position),
         }
     }
 }
@@ -354,7 +363,11 @@ impl FindDefinition for efmt_core::items::forms::Form {
             Self::FunDecl(x) => x.find_definition(ctx, target),
             Self::Define(x) => x.find_definition(ctx, target),
             Self::RecordDecl(x) => x.find_definition(ctx, target),
-            Self::FunSpec(_) | Self::Export(_) | Self::Include(_) | Self::Attr(_) => None,
+            Self::FunSpec(_)
+            | Self::Export(_)
+            | Self::Include(_)
+            | Self::Attr(_)
+            | Self::Doc(_) => None,
         }
     }
 }
@@ -630,6 +643,18 @@ impl FindDefinition for efmt_core::items::forms::ModuleAttr {
             return None;
         }
         Some(item_range(self.module_name()))
+    }
+}
+
+impl FindTarget for efmt_core::items::forms::DocAttr {
+    fn find_target(&self, _text: &str, _position: Position) -> Option<Target> {
+        None
+    }
+}
+
+impl FindDefinition for efmt_core::items::forms::DocAttr {
+    fn find_definition(&self, _ctx: &FindDefinitionContext, _target: &Target) -> Option<ItemRange> {
+        None
     }
 }
 
