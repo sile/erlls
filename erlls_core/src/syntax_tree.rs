@@ -624,10 +624,10 @@ impl FindDefinition for efmt_core::items::forms::TypeDecl {
 impl FindTarget for efmt_core::items::forms::ModuleAttr {
     fn find_target(&self, _text: &str, position: Position) -> Option<Target> {
         if self.module_name().contains_inclusive(position) {
-            return Some(Target::Module {
+            Some(Target::Module {
                 position: self.module_name().start_position(),
                 module_name: self.module_name().value().to_owned(),
-            });
+            })
         } else {
             None
         }
@@ -884,7 +884,7 @@ impl<A: FindTarget, B: FindTarget> FindTarget for efmt_core::items::Either<A, B>
     }
 }
 
-impl<'a, A: FindTarget> FindTarget for &'a A {
+impl<A: FindTarget> FindTarget for &A {
     fn find_target(&self, text: &str, position: Position) -> Option<Target> {
         (*self).find_target(text, position)
     }
@@ -1040,7 +1040,7 @@ impl FindTarget for efmt_core::items::expressions::FunctionCallExpr {
             if x.contains_inclusive(position) {
                 if self
                     .module_expr()
-                    .map_or(false, |x| x.as_atom_token().is_none())
+                    .is_some_and(|x| x.as_atom_token().is_none())
                 {
                     return None;
                 };
