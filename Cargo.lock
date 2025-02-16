@@ -141,7 +141,7 @@ dependencies = [
 
 [[package]]
 name = "erlls"
-version = "0.0.25"
+version = "0.0.26"
 dependencies = [
  "env_logger",
  "erlls_core",
@@ -152,7 +152,7 @@ dependencies = [
 
 [[package]]
 name = "erlls_core"
-version = "0.0.25"
+version = "0.0.26"
 dependencies = [
  "efmt_core",
  "erl_tokenize",

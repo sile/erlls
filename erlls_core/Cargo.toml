@@ -1,6 +1,6 @@
 [package]
 name = "erlls_core"
-version = "0.0.25"
+version = "0.0.26"
 edition = "2021"
 authors = ["Takeru Ohta <phjgt308@gmail.com>"]
 license = "MIT OR Apache-2.0"

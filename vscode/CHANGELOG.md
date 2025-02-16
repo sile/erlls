@@ -6,6 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.26] - 2025-02-16
+
+### Fixed
+
+- Fix float tokenizing bug
+
 ## [0.0.25] - 2025-02-15
 
 ### Added
