@@ -20,7 +20,7 @@ Supported LSP features
   - [ ] Variable
   - [x] Include file
 - [x] [textDocument/formatting](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_formatting)
-  - [x] Formatting documents by using [efmt](https://bithub.com/sile/efmt)
+  - [x] Formatting documents by using [efmt](https://github.com/sile/efmt)
 - [ ] [textDocument/completion](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_completion)
   - [x] Fully qualified function name
   - [x] Fully qualified type name
