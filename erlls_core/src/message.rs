@@ -596,6 +596,13 @@ pub struct PublishDiagnosticsParams {
     pub version: Option<i32>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HoverParams {
+    #[serde(flatten)]
+    pub text_document_position: TextDocumentPositionParams,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SemanticTokenType {

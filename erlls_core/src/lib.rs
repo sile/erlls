@@ -6,6 +6,7 @@ pub mod error;
 pub mod formatting_provider;
 pub mod fs;
 pub mod header;
+pub mod hover_provider;
 pub mod message;
 pub mod push_diagnostics_provider;
 pub mod semantic_tokens_provider;
