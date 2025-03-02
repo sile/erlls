@@ -237,6 +237,7 @@ impl Default for ServerInfo {
 pub struct ServerCapabilities {
     pub document_formatting_provider: bool,
     pub definition_provider: bool,
+    pub hover_provider: bool,
     pub completion_provider: CompletionOptions,
     pub semantic_tokens_provider: serde_json::Value,
     pub text_document_sync: TextDocumentSyncKind,
@@ -248,6 +249,7 @@ impl Default for ServerCapabilities {
         Self {
             document_formatting_provider: true,
             definition_provider: true,
+            hover_provider: true,
             completion_provider: CompletionOptions::default(),
             semantic_tokens_provider: SemanticTokensProvider::options(),
             text_document_sync: TextDocumentSyncKind::INCREMENTAL,
