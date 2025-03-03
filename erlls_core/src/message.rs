@@ -603,6 +603,27 @@ pub struct HoverParams {
     pub text_document_position: TextDocumentPositionParams,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Hover {
+    pub contents: MarkupContent,
+    pub range: Option<Range>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkupContent {
+    pub kind: MarkupKind,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MarkupKind {
+    PlainText,
+    Markdown,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SemanticTokenType {
