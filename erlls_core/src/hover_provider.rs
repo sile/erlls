@@ -4,7 +4,7 @@ use crate::{
     document::DocumentRepository,
     error::ResponseError,
     fs::FileSystem,
-    message::{HoverParams, ResponseMessage},
+    message::{Hover, HoverParams, MarkupContent, MarkupKind, ResponseMessage},
 };
 
 #[derive(Debug)]
@@ -13,9 +13,16 @@ pub struct HoverProvider;
 impl HoverProvider {
     pub fn handle_request<FS: FileSystem>(
         &mut self,
-        params: HoverParams,
-        documents: &DocumentRepository<FS>,
+        _params: HoverParams,
+        _documents: &DocumentRepository<FS>,
     ) -> Result<ResponseMessage, ResponseError> {
-        todo!()
+        let hover = Hover {
+            contents: MarkupContent {
+                kind: MarkupKind::Markdown,
+                value: "Hello, world!".to_string(),
+            },
+            range: None,
+        };
+        Ok(ResponseMessage::result(hover).or_fail()?)
     }
 }
