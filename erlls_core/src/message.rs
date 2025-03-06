@@ -603,6 +603,16 @@ pub struct HoverParams {
     pub text_document_position: TextDocumentPositionParams,
 }
 
+impl HoverParams {
+    pub fn text_document(&self) -> &TextDocumentIdentifier {
+        &self.text_document_position.text_document
+    }
+
+    pub fn position(&self) -> Position {
+        self.text_document_position.position
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Hover {

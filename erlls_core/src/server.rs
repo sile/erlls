@@ -131,10 +131,14 @@ impl<FS: FileSystem> LanguageServer<FS> {
                             .handle_full_request(params, &self.document_repository)
                     })
                 }
-                "textDocument/hover" => deserialize_params(msg.params).and_then(|params| {
-                    self.hover_provider
-                        .handle_request(params, &self.document_repository)
-                }),
+                "textDocument/hover" => match deserialize_params(msg.params) {
+                    Err(e) => Err(e),
+                    Ok(params) => {
+                        self.hover_provider
+                            .handle_request(params, &mut self.document_repository)
+                            .await
+                    }
+                },
                 "shutdown" => Ok(ResponseMessage::default()),
                 _ => {
                     todo!("handle_request: method={}", msg.method)
