@@ -50,9 +50,14 @@ impl HoverProvider {
             _ => {}
         }
 
-        let doc = Self::find_hover_doc(&target, target_uri.clone(), documents)
-            .await
-            .or_fail()?;
+        let result = Self::find_hover_doc(&target, target_uri.clone(), documents, true).await;
+        let doc = if let Ok(doc) = result {
+            doc
+        } else {
+            Self::find_hover_doc(&target, target_uri.clone(), documents, false)
+                .await
+                .or_fail()?
+        };
         log::debug!("hover: {doc:?}");
 
         let hover = Hover {
@@ -69,6 +74,7 @@ impl HoverProvider {
         target: &Target,
         target_uri: DocumentUri, // TODO: rename
         documents: &mut DocumentRepository<FS>,
+        strict: bool,
     ) -> orfail::Result<String> {
         let mut visited: HashSet<DocumentUri> = HashSet::new();
         visited.insert(target_uri.clone());
@@ -77,7 +83,7 @@ impl HoverProvider {
         while let Some(target_uri) = stack.pop() {
             let text = documents.get_or_read_text(&target_uri).await.or_fail()?;
             let tree = SyntaxTree::parse_as_much_as_possible(text).or_fail()?;
-            if let Some(doc) = tree.find_hover_doc(target) {
+            if let Some(doc) = tree.find_hover_doc(target, strict) {
                 if doc.is_empty() {
                     break;
                 }

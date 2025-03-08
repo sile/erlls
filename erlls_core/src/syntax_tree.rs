@@ -202,15 +202,15 @@ impl SyntaxTree {
             })
     }
 
-    pub fn find_hover_doc(&self, target: &Target) -> Option<String> {
+    pub fn find_hover_doc(&self, target: &Target, check_arity: bool) -> Option<String> {
         let text = self.ts.text();
         self.module
             .as_ref()
-            .and_then(|x| x.find_hover_doc(&text, target))
+            .and_then(|x| x.find_hover_doc(&text, target, check_arity))
             .or_else(|| {
                 self.maybe_partial_module
                     .as_ref()
-                    .and_then(|x| x.find_hover_doc(&text, target))
+                    .and_then(|x| x.find_hover_doc(&text, target, check_arity))
             })
     }
 
@@ -296,7 +296,7 @@ pub trait FindTarget {
 }
 
 pub trait FindHoverDoc {
-    fn find_hover_doc(&self, text: &str, target: &Target) -> Option<String>;
+    fn find_hover_doc(&self, text: &str, target: &Target, check_arity: bool) -> Option<String>;
 }
 
 impl<const ALLOW_PARTIAL_FAILURE: bool> FindTarget
@@ -315,7 +315,7 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindTarget
 impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
     for efmt_core::items::Module<ALLOW_PARTIAL_FAILURE>
 {
-    fn find_hover_doc(&self, text: &str, target: &Target) -> Option<String> {
+    fn find_hover_doc(&self, text: &str, target: &Target, check_arity: bool) -> Option<String> {
         let check_module = |form: &efmt_core::items::Form| {
             let Some(module_name) = target.module_name() else {
                 return Some(());
@@ -356,6 +356,7 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
             | Target::Record { .. } => {
                 let mut target_forms = Vec::new();
                 let mut found = false;
+                let arity = target.arity();
                 for form in self.children() {
                     check_module(form)?;
                     match form.get() {
@@ -367,6 +368,7 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
                         efmt_core::items::forms::Form::Define(f) => {
                             if matches!(target, Target::Macro { .. })
                                 && target.name() == f.macro_name()
+                                && (!check_arity || arity == f.variables().map(|x| x.len()))
                             {
                                 target_forms.push(form.get());
                                 found = true;
@@ -375,9 +377,10 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
                         }
                         efmt_core::items::forms::Form::FunDecl(f) => {
                             if matches!(target, Target::Function { .. })
-                                && f.clauses()
-                                    .next()
-                                    .is_some_and(|c| target.name() == c.function_name().value())
+                                && f.clauses().next().is_some_and(|c| {
+                                    target.name() == c.function_name().value()
+                                        && (!check_arity || arity == Some(c.params().len()))
+                                })
                             {
                                 found = true;
                                 break;
@@ -386,6 +389,7 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
                         efmt_core::items::forms::Form::TypeDecl(f) => {
                             if matches!(target, Target::Type { .. })
                                 && target.name() == f.type_name().value()
+                                && (!check_arity || arity == Some(f.params().len()))
                             {
                                 target_forms.push(form.get());
                                 found = true;
@@ -430,12 +434,17 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
                     if !doc.is_empty() {
                         doc.push_str("\n\n---\n\n");
                     }
+
                     if let efmt_core::items::forms::Form::Doc(form) = form {
-                        // TODO: extract markdown
-                        doc.push_str(form.text(text));
-                    } else {
-                        doc.push_str(&format!("```erlang\n{}\n```", form.text(text)));
+                        if form.value().items().len() == 1 {
+                            if let Some(markdown) = form.value().items()[0].as_string() {
+                                doc.push_str(markdown);
+                                continue;
+                            }
+                        }
                     }
+
+                    doc.push_str(&format!("```erlang\n{}\n```", form.text(text)));
                 }
                 Some(doc)
             }
@@ -1333,6 +1342,18 @@ impl Target {
             Target::RecordField { position, .. } => *position,
             Target::Variable { position, .. } => *position,
             Target::Include { position, .. } => *position,
+        }
+    }
+
+    pub fn arity(&self) -> Option<usize> {
+        match self {
+            Target::Module { .. }
+            | Target::Record { .. }
+            | Target::RecordField { .. }
+            | Target::Variable { .. }
+            | Target::Include { .. } => None,
+            Target::Macro { arity, .. } => *arity,
+            Target::Type { arity, .. } | Target::Function { arity, .. } => Some(*arity),
         }
     }
 
