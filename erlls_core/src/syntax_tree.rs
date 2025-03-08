@@ -315,8 +315,36 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindTarget
 impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
     for efmt_core::items::Module<ALLOW_PARTIAL_FAILURE>
 {
-    fn find_hover_doc(&self, text: &str, target: &Target) -> Option<String> {
-        todo!()
+    fn find_hover_doc(&self, _text: &str, target: &Target) -> Option<String> {
+        match target {
+            Target::Module { module_name, .. } => {
+                let mut doc = format!("# -module({module_name}).\n\n");
+                let mut found = false;
+                for form in self.children() {
+                    match form.get() {
+                        efmt_core::items::forms::Form::Module(module_attr) => {
+                            if module_attr.module_name().value() != module_name {
+                                return None;
+                            }
+                        }
+                        efmt_core::items::forms::Form::Attr(attr) => {
+                            if attr.name() == "moduledoc" && attr.values().len() == 1 {
+                                if let Some(s) = attr.values()[0].as_string() {
+                                    doc.push_str(s);
+                                    found = true;
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                found.then_some(doc)
+            }
+            Target::Include { .. } => return None,
+            _ => {
+                todo!()
+            }
+        }
     }
 }
 
