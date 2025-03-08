@@ -97,6 +97,6 @@ impl HoverProvider {
             }
         }
 
-        Err(orfail::Failure::new("No hover doc found"))
+        Err(orfail::Failure::new("No doc found"))
     }
 }

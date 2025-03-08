@@ -5,7 +5,7 @@ use efmt_core::{
 };
 use erl_tokenize::values::Symbol;
 use orfail::OrFail;
-use std::{path::PathBuf, sync::Arc};
+use std::{cmp::Ordering, path::PathBuf, sync::Arc};
 
 pub type ItemRange = std::ops::Range<Position>;
 
@@ -342,13 +342,12 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
                                 continue;
                             }
                             if !doc.is_empty() {
-                                doc.push_str("\n---\n");
+                                doc.push_str("\n-n---\n\n");
                             }
                             if let Some(s) = attr.values()[0].as_string() {
                                 doc.push_str(s);
                             } else {
-                                // Maybe metadata
-                                doc.push_str(attr.text(text));
+                                doc.push_str(&format!("```erlang\n{}\n```", attr.text(text)));
                             }
                         }
                         _ => {}
@@ -421,16 +420,27 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
                     }
                 }
 
+                target_forms.sort_by(|a, b| {
+                    use efmt_core::items::forms::Form;
+
+                    match (a, b) {
+                        (Form::Doc { .. }, Form::Doc { .. }) => Ordering::Equal,
+                        (Form::Doc { .. }, _) => Ordering::Greater,
+                        (_, Form::Doc { .. }) => Ordering::Less,
+                        _ => Ordering::Equal,
+                    }
+                });
+
                 let mut doc = String::new();
                 for form in target_forms {
                     if !doc.is_empty() {
-                        doc.push_str("\n---\n");
+                        doc.push_str("\n\n---\n\n");
                     }
                     if let efmt_core::items::forms::Form::Doc(form) = form {
                         // TODO: extract markdown
                         doc.push_str(form.text(text));
                     } else {
-                        doc.push_str(form.text(text));
+                        doc.push_str(&format!("```erlang\n{}\n```", form.text(text)));
                     }
                 }
                 Some(doc)
