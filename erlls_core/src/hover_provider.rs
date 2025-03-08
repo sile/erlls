@@ -78,6 +78,9 @@ impl HoverProvider {
             let text = documents.get_or_read_text(&target_uri).await.or_fail()?;
             let tree = SyntaxTree::parse_as_much_as_possible(text).or_fail()?;
             if let Some(doc) = tree.find_hover_doc(target) {
+                if doc.is_empty() {
+                    break;
+                }
                 return Ok(doc);
             } else {
                 visited.insert(target_uri.clone());

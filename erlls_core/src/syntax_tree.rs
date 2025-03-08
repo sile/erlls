@@ -332,21 +332,22 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
         };
 
         match target {
-            Target::Module { module_name, .. } => {
-                let mut doc = format!("# -module({module_name}).");
+            Target::Module { .. } => {
+                let mut doc = String::new();
                 for form in self.children() {
                     check_module(form)?;
                     match form.get() {
                         efmt_core::items::forms::Form::Attr(attr)=>{
                             if !(attr.name() == "moduledoc" && attr.values().len() == 1) {
                                 continue;
-                             }
+                            }
+                            if !doc.is_empty(){
+                                doc.push_str("\n---\n");
+                            }
                             if let Some(s) = attr.values()[0].as_string() {
-                                doc.push_str("\n\n");
                                 doc.push_str(s);
                             } else {
                                 // Maybe metadata
-                                doc.push_str("\n\n");
                                 doc.push_str(attr.text(text));
                             }
                         }
@@ -355,33 +356,79 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
                 }
                  Some(doc)
             }
-            Target::Include { .. } | Target::Variable { .. } => return None,
-            Target::Type {
-                // position,
-                // module_nam
-                // type_name,
-                // arity,
-                ..
-            } => todo!(),
-            Target::Function {
-                // position,
-                // module_name,
-                // function_name,
-                // arity,
-                // maybe_type,
-                ..
-            } => todo!(),
-            Target::Macro {
-                // position,
-                // macro_name,
-                // arity,
-                ..
-            } => todo!(),
-            Target::Record {
-                // position,
-                // record_name,
-                ..
-            } => todo!(),
+            Target::Include { .. } | Target::Variable { .. } => return Some("".to_owned()),
+            Target::Type { .. } |
+            Target::Function { .. } |
+            Target::Macro { .. } |
+            Target::Record { .. } => {
+                let mut target_forms = Vec::new();
+                let mut found = false;
+                for form in self.children() {
+                    check_module(form)?;
+                    match form.get() {
+                        efmt_core::items::forms::Form::FunSpec(_) |
+                        efmt_core::items::forms::Form::Doc(_) => {
+                            target_forms.push(form.get());
+                            continue;
+                        }
+                        efmt_core::items::forms::Form::Define(f) => {
+                            if matches!(target, Target::Macro { .. }) &&
+                                target.name() == f.macro_name() {
+                                    target_forms.push(form.get());
+                                    found = true;
+                                    break;
+                            }
+                        },
+                        efmt_core::items::forms::Form::FunDecl(f) => {
+                            if matches!(target, Target::Function { .. }) &&
+                                f.clauses().next().is_some_and(|c| target.name() == c.function_name().value()) {
+                                    found = true;
+                                    break;
+                            }
+                        }
+                        efmt_core::items::forms::Form::TypeDecl(f) => {
+                            if matches!(target, Target::Type { .. }) &&
+                                target.name() == f.type_name().value() {
+                                    target_forms.push(form.get());
+                                    found = true;
+                                    break;
+                            }
+                        }
+                        efmt_core::items::forms::Form::RecordDecl(f) => {
+                            if matches!(target, Target::Record { .. }) &&
+                                target.name() == f.record_name().value() {
+                                    target_forms.push(form.get());
+                                    found = true;
+                                    break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    target_forms.clear();
+                }
+
+                if !found {
+                    if target.module_name().is_some() {
+                        return Some("".to_owned());
+                    } else {
+                        return None;
+                    }
+                }
+
+                let mut doc = String::new();
+                for form in target_forms {
+                    if !doc.is_empty() {
+                        doc.push_str("\n---\n");
+                    }
+                    if let efmt_core::items::forms::Form::Doc(form) = form {
+                        // TODO
+                        doc.push_str(form.text(text));
+                    } else {
+                        doc.push_str(form.text(text));
+                    }
+                }
+                Some(doc)
+            }
             Target::RecordField {
                 // position,
                 // record_name,
@@ -1237,7 +1284,6 @@ pub enum Target {
 }
 
 impl Target {
-    #[cfg(test)]
     pub fn name(&self) -> &str {
         match self {
             Target::Module { module_name, .. } => module_name,
