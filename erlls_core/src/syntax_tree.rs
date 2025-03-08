@@ -337,11 +337,11 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
                 for form in self.children() {
                     check_module(form)?;
                     match form.get() {
-                        efmt_core::items::forms::Form::Attr(attr)=>{
+                        efmt_core::items::forms::Form::Attr(attr) => {
                             if !(attr.name() == "moduledoc" && attr.values().len() == 1) {
                                 continue;
                             }
-                            if !doc.is_empty(){
+                            if !doc.is_empty() {
                                 doc.push_str("\n---\n");
                             }
                             if let Some(s) = attr.values()[0].as_string() {
@@ -354,52 +354,58 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
                         _ => {}
                     }
                 }
-                 Some(doc)
+                Some(doc)
             }
             Target::Include { .. } | Target::Variable { .. } => return Some("".to_owned()),
-            Target::Type { .. } |
-            Target::Function { .. } |
-            Target::Macro { .. } |
-            Target::Record { .. } => {
+            Target::Type { .. }
+            | Target::Function { .. }
+            | Target::Macro { .. }
+            | Target::Record { .. } => {
                 let mut target_forms = Vec::new();
                 let mut found = false;
                 for form in self.children() {
                     check_module(form)?;
                     match form.get() {
-                        efmt_core::items::forms::Form::FunSpec(_) |
-                        efmt_core::items::forms::Form::Doc(_) => {
+                        efmt_core::items::forms::Form::FunSpec(_)
+                        | efmt_core::items::forms::Form::Doc(_) => {
                             target_forms.push(form.get());
                             continue;
                         }
                         efmt_core::items::forms::Form::Define(f) => {
-                            if matches!(target, Target::Macro { .. }) &&
-                                target.name() == f.macro_name() {
-                                    target_forms.push(form.get());
-                                    found = true;
-                                    break;
+                            if matches!(target, Target::Macro { .. })
+                                && target.name() == f.macro_name()
+                            {
+                                target_forms.push(form.get());
+                                found = true;
+                                break;
                             }
-                        },
+                        }
                         efmt_core::items::forms::Form::FunDecl(f) => {
-                            if matches!(target, Target::Function { .. }) &&
-                                f.clauses().next().is_some_and(|c| target.name() == c.function_name().value()) {
-                                    found = true;
-                                    break;
+                            if matches!(target, Target::Function { .. })
+                                && f.clauses()
+                                    .next()
+                                    .is_some_and(|c| target.name() == c.function_name().value())
+                            {
+                                found = true;
+                                break;
                             }
                         }
                         efmt_core::items::forms::Form::TypeDecl(f) => {
-                            if matches!(target, Target::Type { .. }) &&
-                                target.name() == f.type_name().value() {
-                                    target_forms.push(form.get());
-                                    found = true;
-                                    break;
+                            if matches!(target, Target::Type { .. })
+                                && target.name() == f.type_name().value()
+                            {
+                                target_forms.push(form.get());
+                                found = true;
+                                break;
                             }
                         }
                         efmt_core::items::forms::Form::RecordDecl(f) => {
-                            if matches!(target, Target::Record { .. }) &&
-                                target.name() == f.record_name().value() {
-                                    target_forms.push(form.get());
-                                    found = true;
-                                    break;
+                            if matches!(target, Target::Record { .. })
+                                && target.name() == f.record_name().value()
+                            {
+                                target_forms.push(form.get());
+                                found = true;
+                                break;
                             }
                         }
                         _ => {}
@@ -421,7 +427,7 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
                         doc.push_str("\n---\n");
                     }
                     if let efmt_core::items::forms::Form::Doc(form) = form {
-                        // TODO
+                        // TODO: extract markdown
                         doc.push_str(form.text(text));
                     } else {
                         doc.push_str(form.text(text));
@@ -430,11 +436,27 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
                 Some(doc)
             }
             Target::RecordField {
-                // position,
-                // record_name,
-                // field_name,
+                record_name,
+                field_name,
                 ..
-            } => todo!(),
+            } => {
+                for form in self.children() {
+                    match form.get() {
+                        efmt_core::items::forms::Form::RecordDecl(f)
+                            if f.record_name().value() == record_name =>
+                        {
+                            for field in f.fields() {
+                                if field.field_name().value() == field_name {
+                                    return Some(field.text(text).to_owned());
+                                }
+                            }
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+                None
+            }
         }
     }
 }
