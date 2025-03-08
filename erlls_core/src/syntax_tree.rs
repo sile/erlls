@@ -315,35 +315,79 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindTarget
 impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
     for efmt_core::items::Module<ALLOW_PARTIAL_FAILURE>
 {
-    fn find_hover_doc(&self, _text: &str, target: &Target) -> Option<String> {
+    fn find_hover_doc(&self, text: &str, target: &Target) -> Option<String> {
+        let check_module = |form: &efmt_core::items::Form| {
+            let Some(module_name) = target.module_name() else {
+                return Some(());
+            };
+            match form.get() {
+                efmt_core::items::forms::Form::Module(module_attr) => {
+                    if module_attr.module_name().value() != module_name {
+                        return None;
+                    }
+                }
+                _ => {}
+            }
+            Some(())
+        };
+
         match target {
             Target::Module { module_name, .. } => {
-                let mut doc = format!("# -module({module_name}).\n\n");
-                let mut found = false;
+                let mut doc = format!("# -module({module_name}).");
                 for form in self.children() {
+                    check_module(form)?;
                     match form.get() {
-                        efmt_core::items::forms::Form::Module(module_attr) => {
-                            if module_attr.module_name().value() != module_name {
-                                return None;
+                        efmt_core::items::forms::Form::Attr(attr)=>{
+                            if !(attr.name() == "moduledoc" && attr.values().len() == 1) {
+                                continue;
                             }
-                        }
-                        efmt_core::items::forms::Form::Attr(attr) => {
-                            if attr.name() == "moduledoc" && attr.values().len() == 1 {
-                                if let Some(s) = attr.values()[0].as_string() {
-                                    doc.push_str(s);
-                                    found = true;
-                                }
+                            if let Some(s) = attr.values()[0].as_string() {
+                                doc.push_str("\n\n");
+                                doc.push_str(s);
+                            } else {
+                                // Maybe metadata
+                                doc.push_str("\n\n");
+                                doc.push_str(attr.text(text));
                             }
                         }
                         _ => {}
                     }
                 }
-                found.then_some(doc)
+                 Some(doc)
             }
-            Target::Include { .. } => return None,
-            _ => {
-                todo!()
-            }
+            Target::Include { .. } | Target::Variable { .. } => return None,
+            Target::Type {
+                // position,
+                // module_nam
+                // type_name,
+                // arity,
+                ..
+            } => todo!(),
+            Target::Function {
+                // position,
+                // module_name,
+                // function_name,
+                // arity,
+                // maybe_type,
+                ..
+            } => todo!(),
+            Target::Macro {
+                // position,
+                // macro_name,
+                // arity,
+                ..
+            } => todo!(),
+            Target::Record {
+                // position,
+                // record_name,
+                ..
+            } => todo!(),
+            Target::RecordField {
+                // position,
+                // record_name,
+                // field_name,
+                ..
+            } => todo!(),
         }
     }
 }
@@ -1217,6 +1261,20 @@ impl Target {
             Target::RecordField { position, .. } => *position,
             Target::Variable { position, .. } => *position,
             Target::Include { position, .. } => *position,
+        }
+    }
+
+    pub fn module_name(&self) -> Option<&str> {
+        match self {
+            Target::Module { module_name, .. } => Some(module_name.as_str()),
+            Target::Type { module_name, .. } | Target::Function { module_name, .. } => {
+                module_name.as_ref().map(|s| s.as_str())
+            }
+            Target::Macro { .. }
+            | Target::Record { .. }
+            | Target::RecordField { .. }
+            | Target::Variable { .. }
+            | Target::Include { .. } => None,
         }
     }
 }
