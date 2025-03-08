@@ -340,7 +340,7 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
                         efmt_core::items::forms::Form::Attr(attr)=>{
                             if !(attr.name() == "moduledoc" && attr.values().len() == 1) {
                                 continue;
-                            }
+                             }
                             if let Some(s) = attr.values()[0].as_string() {
                                 doc.push_str("\n\n");
                                 doc.push_str(s);

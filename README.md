@@ -34,11 +34,13 @@ Supported LSP features
 - [x] [textDocument/semanticTokens/range](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_semanticTokens)
 - [ ] [textDocument/documentHighlight](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentHighlight)
   - [ ] Variable
+- [x] [textDocument/hover](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_hover)
+  - NOTE: Only the `-doc` and `-moduledoc` attributes are supported (i.e., doc comments are not supported)
 
 Editor integrations
 -------------------
 
-ErlLS can be used with any [LSP](https://microsoft.github.io/language-server-protocol/) clients. 
+ErlLS can be used with any [LSP](https://microsoft.github.io/language-server-protocol/) clients.
 Here are a few examples.
 
 ### Visual Studio Code / Visual Studio Code for the Web
