@@ -1,10 +1,12 @@
+use std::collections::HashSet;
+
 use orfail::OrFail;
 
 use crate::{
     document::DocumentRepository,
     error::ResponseError,
     fs::FileSystem,
-    message::{Hover, HoverParams, MarkupContent, MarkupKind, ResponseMessage},
+    message::{DocumentUri, Hover, HoverParams, MarkupContent, MarkupKind, ResponseMessage},
     syntax_tree::{SyntaxTree, Target},
 };
 
@@ -48,13 +50,50 @@ impl HoverProvider {
             _ => {}
         }
 
+        let doc = Self::find_hover_doc(&target, target_uri.clone(), documents)
+            .await
+            .or_fail()?;
+        log::debug!("hover: {doc:?}");
+
         let hover = Hover {
             contents: MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: "Hello, world!".to_string(),
+                value: doc,
             },
             range: None,
         };
         Ok(ResponseMessage::result(hover).or_fail()?)
+    }
+
+    async fn find_hover_doc<FS: FileSystem>(
+        target: &Target,
+        target_uri: DocumentUri, // TODO: rename
+        documents: &mut DocumentRepository<FS>,
+    ) -> orfail::Result<String> {
+        let mut visited: HashSet<DocumentUri> = HashSet::new();
+        visited.insert(target_uri.clone());
+
+        let mut stack = vec![target_uri.clone()];
+        while let Some(target_uri) = stack.pop() {
+            let text = documents.get_or_read_text(&target_uri).await.or_fail()?;
+            let tree = SyntaxTree::parse_as_much_as_possible(text).or_fail()?;
+            if let Some(doc) = tree.find_hover_doc(target) {
+                return Ok(doc);
+            } else {
+                visited.insert(target_uri.clone());
+
+                for include in tree.collect_includes() {
+                    log::debug!("include: {include:?}");
+                    if let Some(uri) = documents.resolve_include_uri(&target_uri, &include).await {
+                        if visited.contains(&uri) {
+                            continue;
+                        }
+                        stack.push(uri);
+                    }
+                }
+            }
+        }
+
+        Err(orfail::Failure::new("No hover doc found"))
     }
 }

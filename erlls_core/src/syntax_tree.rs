@@ -202,6 +202,18 @@ impl SyntaxTree {
             })
     }
 
+    pub fn find_hover_doc(&self, target: &Target) -> Option<String> {
+        let text = self.ts.text();
+        self.module
+            .as_ref()
+            .and_then(|x| x.find_hover_doc(&text, target))
+            .or_else(|| {
+                self.maybe_partial_module
+                    .as_ref()
+                    .and_then(|x| x.find_hover_doc(&text, target))
+            })
+    }
+
     pub fn find_target(&mut self, position: Position) -> Option<Target> {
         let mut candidate = None;
         for macro_call in self.ts.macros().values() {
@@ -283,6 +295,10 @@ pub trait FindTarget {
     }
 }
 
+pub trait FindHoverDoc {
+    fn find_hover_doc(&self, text: &str, target: &Target) -> Option<String>;
+}
+
 impl<const ALLOW_PARTIAL_FAILURE: bool> FindTarget
     for efmt_core::items::Module<ALLOW_PARTIAL_FAILURE>
 {
@@ -293,6 +309,14 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindTarget
             }
         }
         None
+    }
+}
+
+impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
+    for efmt_core::items::Module<ALLOW_PARTIAL_FAILURE>
+{
+    fn find_hover_doc(&self, text: &str, target: &Target) -> Option<String> {
+        todo!()
     }
 }
 
