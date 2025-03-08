@@ -320,13 +320,10 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
             let Some(module_name) = target.module_name() else {
                 return Some(());
             };
-            match form.get() {
-                efmt_core::items::forms::Form::Module(module_attr) => {
-                    if module_attr.module_name().value() != module_name {
-                        return None;
-                    }
+            if let efmt_core::items::forms::Form::Module(f) = form.get() {
+                if f.module_name().value() != module_name {
+                    return None;
                 }
-                _ => {}
             }
             Some(())
         };
@@ -336,26 +333,23 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
                 let mut doc = String::new();
                 for form in self.children() {
                     check_module(form)?;
-                    match form.get() {
-                        efmt_core::items::forms::Form::Attr(attr) => {
-                            if !(attr.name() == "moduledoc" && attr.values().len() == 1) {
-                                continue;
-                            }
-                            if !doc.is_empty() {
-                                doc.push_str("\n-n---\n\n");
-                            }
-                            if let Some(s) = attr.values()[0].as_string() {
-                                doc.push_str(s);
-                            } else {
-                                doc.push_str(&format!("```erlang\n{}\n```", attr.text(text)));
-                            }
+                    if let efmt_core::items::forms::Form::Attr(attr) = form.get() {
+                        if !(attr.name() == "moduledoc" && attr.values().len() == 1) {
+                            continue;
                         }
-                        _ => {}
+                        if !doc.is_empty() {
+                            doc.push_str("\n-n---\n\n");
+                        }
+                        if let Some(s) = attr.values()[0].as_string() {
+                            doc.push_str(s);
+                        } else {
+                            doc.push_str(&format!("```erlang\n{}\n```", attr.text(text)));
+                        }
                     }
                 }
                 Some(doc)
             }
-            Target::Include { .. } | Target::Variable { .. } => return Some("".to_owned()),
+            Target::Include { .. } | Target::Variable { .. } => Some("".to_owned()),
             Target::Type { .. }
             | Target::Function { .. }
             | Target::Macro { .. }
