@@ -6,6 +6,7 @@ use crate::{
     error::ResponseError,
     formatting_provider::FormattingProvider,
     fs::FileSystem,
+    hover_provider::HoverProvider,
     message::{
         InitializeParams, InitializeResult, Message, NotificationMessage, RequestMessage,
         ResponseMessage,
@@ -25,6 +26,7 @@ pub struct LanguageServer<FS> {
     definition_provider: DefinitionProvider,
     formatting_provider: FormattingProvider,
     completion_provider: CompletionProvider,
+    hover_provider: HoverProvider,
     semantic_tokens_provider: SemanticTokensProvider,
     push_diagnostics_provider: PushDiagnosticsProvider,
 }
@@ -39,6 +41,7 @@ impl<FS: FileSystem> LanguageServer<FS> {
             definition_provider: DefinitionProvider,
             formatting_provider: FormattingProvider,
             completion_provider: CompletionProvider,
+            hover_provider: HoverProvider,
             semantic_tokens_provider: SemanticTokensProvider,
             push_diagnostics_provider: PushDiagnosticsProvider,
         }
@@ -128,6 +131,14 @@ impl<FS: FileSystem> LanguageServer<FS> {
                             .handle_full_request(params, &self.document_repository)
                     })
                 }
+                "textDocument/hover" => match deserialize_params(msg.params) {
+                    Err(e) => Err(e),
+                    Ok(params) => {
+                        self.hover_provider
+                            .handle_request(params, &mut self.document_repository)
+                            .await
+                    }
+                },
                 "shutdown" => Ok(ResponseMessage::default()),
                 _ => {
                     todo!("handle_request: method={}", msg.method)

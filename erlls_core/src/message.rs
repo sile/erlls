@@ -237,6 +237,7 @@ impl Default for ServerInfo {
 pub struct ServerCapabilities {
     pub document_formatting_provider: bool,
     pub definition_provider: bool,
+    pub hover_provider: bool,
     pub completion_provider: CompletionOptions,
     pub semantic_tokens_provider: serde_json::Value,
     pub text_document_sync: TextDocumentSyncKind,
@@ -248,6 +249,7 @@ impl Default for ServerCapabilities {
         Self {
             document_formatting_provider: true,
             definition_provider: true,
+            hover_provider: true,
             completion_provider: CompletionOptions::default(),
             semantic_tokens_provider: SemanticTokensProvider::options(),
             text_document_sync: TextDocumentSyncKind::INCREMENTAL,
@@ -592,6 +594,44 @@ pub struct PublishDiagnosticsParams {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HoverParams {
+    #[serde(flatten)]
+    pub text_document_position: TextDocumentPositionParams,
+}
+
+impl HoverParams {
+    pub fn text_document(&self) -> &TextDocumentIdentifier {
+        &self.text_document_position.text_document
+    }
+
+    pub fn position(&self) -> Position {
+        self.text_document_position.position
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Hover {
+    pub contents: MarkupContent,
+    pub range: Option<Range>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkupContent {
+    pub kind: MarkupKind,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MarkupKind {
+    PlainText,
+    Markdown,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

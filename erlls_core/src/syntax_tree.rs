@@ -5,7 +5,7 @@ use efmt_core::{
 };
 use erl_tokenize::values::Symbol;
 use orfail::OrFail;
-use std::{path::PathBuf, sync::Arc};
+use std::{cmp::Ordering, path::PathBuf, sync::Arc};
 
 pub type ItemRange = std::ops::Range<Position>;
 
@@ -202,6 +202,18 @@ impl SyntaxTree {
             })
     }
 
+    pub fn find_hover_doc(&self, target: &Target, check_arity: bool) -> Option<String> {
+        let text = self.ts.text();
+        self.module
+            .as_ref()
+            .and_then(|x| x.find_hover_doc(&text, target, check_arity))
+            .or_else(|| {
+                self.maybe_partial_module
+                    .as_ref()
+                    .and_then(|x| x.find_hover_doc(&text, target, check_arity))
+            })
+    }
+
     pub fn find_target(&mut self, position: Position) -> Option<Target> {
         let mut candidate = None;
         for macro_call in self.ts.macros().values() {
@@ -283,6 +295,10 @@ pub trait FindTarget {
     }
 }
 
+pub trait FindHoverDoc {
+    fn find_hover_doc(&self, text: &str, target: &Target, check_arity: bool) -> Option<String>;
+}
+
 impl<const ALLOW_PARTIAL_FAILURE: bool> FindTarget
     for efmt_core::items::Module<ALLOW_PARTIAL_FAILURE>
 {
@@ -293,6 +309,168 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindTarget
             }
         }
         None
+    }
+}
+
+impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
+    for efmt_core::items::Module<ALLOW_PARTIAL_FAILURE>
+{
+    fn find_hover_doc(&self, text: &str, target: &Target, check_arity: bool) -> Option<String> {
+        let check_module = |form: &efmt_core::items::Form| {
+            let Some(module_name) = target.module_name() else {
+                return Some(());
+            };
+            if let efmt_core::items::forms::Form::Module(f) = form.get() {
+                if f.module_name().value() != module_name {
+                    return None;
+                }
+            }
+            Some(())
+        };
+
+        match target {
+            Target::Module { .. } => {
+                let mut doc = String::new();
+                for form in self.children() {
+                    check_module(form)?;
+                    if let efmt_core::items::forms::Form::Attr(attr) = form.get() {
+                        if !(attr.name() == "moduledoc" && attr.values().len() == 1) {
+                            continue;
+                        }
+                        if !doc.is_empty() {
+                            doc.push_str("\n-n---\n\n");
+                        }
+                        if let Some(s) = attr.values()[0].as_string() {
+                            doc.push_str(s);
+                        } else {
+                            doc.push_str(&format!("```erlang\n{}\n```", attr.text(text)));
+                        }
+                    }
+                }
+                Some(doc)
+            }
+            Target::Include { .. } | Target::Variable { .. } => Some("".to_owned()),
+            Target::Type { .. }
+            | Target::Function { .. }
+            | Target::Macro { .. }
+            | Target::Record { .. } => {
+                let mut target_forms = Vec::new();
+                let mut found = false;
+                let arity = target.arity();
+                for form in self.children() {
+                    check_module(form)?;
+                    match form.get() {
+                        efmt_core::items::forms::Form::FunSpec(_)
+                        | efmt_core::items::forms::Form::Doc(_) => {
+                            target_forms.push(form.get());
+                            continue;
+                        }
+                        efmt_core::items::forms::Form::Define(f) => {
+                            if matches!(target, Target::Macro { .. })
+                                && target.name() == f.macro_name()
+                                && (!check_arity || arity == f.variables().map(|x| x.len()))
+                            {
+                                target_forms.push(form.get());
+                                found = true;
+                                break;
+                            }
+                        }
+                        efmt_core::items::forms::Form::FunDecl(f) => {
+                            if matches!(target, Target::Function { .. })
+                                && f.clauses().next().is_some_and(|c| {
+                                    target.name() == c.function_name().value()
+                                        && (!check_arity || arity == Some(c.params().len()))
+                                })
+                            {
+                                found = true;
+                                break;
+                            }
+                        }
+                        efmt_core::items::forms::Form::TypeDecl(f) => {
+                            if matches!(target, Target::Type { .. })
+                                && target.name() == f.type_name().value()
+                                && (!check_arity || arity == Some(f.params().len()))
+                            {
+                                target_forms.push(form.get());
+                                found = true;
+                                break;
+                            }
+                        }
+                        efmt_core::items::forms::Form::RecordDecl(f) => {
+                            if matches!(target, Target::Record { .. })
+                                && target.name() == f.record_name().value()
+                            {
+                                target_forms.push(form.get());
+                                found = true;
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    target_forms.clear();
+                }
+
+                if !found {
+                    if target.module_name().is_some() {
+                        return Some("".to_owned());
+                    } else {
+                        return None;
+                    }
+                }
+
+                target_forms.sort_by(|a, b| {
+                    use efmt_core::items::forms::Form;
+
+                    match (a, b) {
+                        (Form::Doc { .. }, Form::Doc { .. }) => Ordering::Equal,
+                        (Form::Doc { .. }, _) => Ordering::Greater,
+                        (_, Form::Doc { .. }) => Ordering::Less,
+                        _ => Ordering::Equal,
+                    }
+                });
+
+                let mut doc = String::new();
+                for form in target_forms {
+                    if !doc.is_empty() {
+                        doc.push_str("\n\n---\n\n");
+                    }
+
+                    if let efmt_core::items::forms::Form::Doc(form) = form {
+                        if form.value().items().len() == 1 {
+                            if let Some(markdown) = form.value().items()[0].as_string() {
+                                doc.push_str(markdown);
+                                continue;
+                            }
+                        }
+                    }
+
+                    doc.push_str(&format!("```erlang\n{}\n```", form.text(text)));
+                }
+                Some(doc)
+            }
+            Target::RecordField {
+                record_name,
+                field_name,
+                ..
+            } => {
+                for form in self.children() {
+                    match form.get() {
+                        efmt_core::items::forms::Form::RecordDecl(f)
+                            if f.record_name().value() == record_name =>
+                        {
+                            for field in f.fields() {
+                                if field.field_name().value() == field_name {
+                                    return Some(field.text(text).to_owned());
+                                }
+                            }
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+                None
+            }
+        }
     }
 }
 
@@ -1141,7 +1319,6 @@ pub enum Target {
 }
 
 impl Target {
-    #[cfg(test)]
     pub fn name(&self) -> &str {
         match self {
             Target::Module { module_name, .. } => module_name,
@@ -1165,6 +1342,32 @@ impl Target {
             Target::RecordField { position, .. } => *position,
             Target::Variable { position, .. } => *position,
             Target::Include { position, .. } => *position,
+        }
+    }
+
+    pub fn arity(&self) -> Option<usize> {
+        match self {
+            Target::Module { .. }
+            | Target::Record { .. }
+            | Target::RecordField { .. }
+            | Target::Variable { .. }
+            | Target::Include { .. } => None,
+            Target::Macro { arity, .. } => *arity,
+            Target::Type { arity, .. } | Target::Function { arity, .. } => Some(*arity),
+        }
+    }
+
+    pub fn module_name(&self) -> Option<&str> {
+        match self {
+            Target::Module { module_name, .. } => Some(module_name.as_str()),
+            Target::Type { module_name, .. } | Target::Function { module_name, .. } => {
+                module_name.as_ref().map(|s| s.as_str())
+            }
+            Target::Macro { .. }
+            | Target::Record { .. }
+            | Target::RecordField { .. }
+            | Target::Variable { .. }
+            | Target::Include { .. } => None,
         }
     }
 }
