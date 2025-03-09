@@ -6,6 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.27] - 2025-03-09
+
+### Added
+
+- Add basic support for `textDocument/hover` request
+
 ## [0.0.26] - 2025-02-16
 
 ### Fixed
