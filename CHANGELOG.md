@@ -6,6 +6,13 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.28] - 2025-08-02
+
+### Fixed
+
+- Fix crash when invalid tokens contain multi-byte characters
+- Fix semantic token position calculation to handle UTF-16 encoding and multi-line tokens
+
 ## [0.0.27] - 2025-03-09
 
 ### Added
