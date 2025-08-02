@@ -114,7 +114,7 @@ impl<'a> Highlighter<'a> {
     fn to_char_position(&self, pos: TokenizePosition) -> CharPosition {
         let line = pos.line() as u32 - 1;
         let column = self.lines[line as usize][..pos.column() - 1]
-            .chars()
+            .encode_utf16()
             .count() as u32;
         CharPosition { line, column }
     }
@@ -127,7 +127,7 @@ impl<'a> Highlighter<'a> {
                 end_position
             } else {
                 let line = start_position.line;
-                let column = self.lines[line as usize].chars().count() as u32;
+                let column = self.lines[line as usize].encode_utf16().count() as u32;
                 CharPosition { line, column }
             };
             let semantic_token =
