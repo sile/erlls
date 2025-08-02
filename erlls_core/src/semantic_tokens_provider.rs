@@ -68,7 +68,7 @@ impl SemanticTokensProvider {
         let text = doc.text.to_range_string(params.range);
 
         let mut tokenizer = erl_tokenize::Tokenizer::new(&text);
-        let mut highlighter = Highlighter::new();
+        let mut highlighter = Highlighter::new(&text);
         while let Some(token) = tokenizer.next() {
             let Ok(token) = token else {
                 tokenizer.consume_char();
@@ -92,16 +92,18 @@ enum BlockType {
 }
 
 #[derive(Debug)]
-struct Highlighter {
-    last_start_position: TokenizePosition,
+struct Highlighter<'a> {
+    lines: Vec<&'a str>,
+    last_start_position: CharPosition,
     prev_tokens: VecDeque<erl_tokenize::Token>,
     semantic_tokens: SemanticTokens,
     block_stack: Vec<BlockType>,
 }
 
-impl Highlighter {
-    fn new() -> Self {
+impl<'a> Highlighter<'a> {
+    fn new(text: &'a str) -> Self {
         Self {
+            lines: text.lines().collect(),
             last_start_position: Default::default(),
             prev_tokens: VecDeque::new(),
             semantic_tokens: SemanticTokens::default(),
@@ -109,10 +111,33 @@ impl Highlighter {
         }
     }
 
+    fn to_char_position(&self, pos: TokenizePosition) -> CharPosition {
+        let line = pos.line() as u32 - 1;
+        let column = self.lines[line as usize][..pos.column() - 1]
+            .chars()
+            .count() as u32;
+        CharPosition { line, column }
+    }
+
     fn add_semantic_token(&mut self, token: &impl PositionRange, ty: SemanticTokenType) {
-        let semantic_token = SemanticToken::new(token, self.last_start_position.clone(), ty);
-        self.last_start_position = token.start_position();
-        self.semantic_tokens.data.extend(semantic_token.iter());
+        let mut start_position = self.to_char_position(token.start_position());
+        let end_position = self.to_char_position(token.end_position());
+        while start_position.line <= end_position.line {
+            let end_position = if start_position.line == end_position.line {
+                end_position
+            } else {
+                let line = start_position.line;
+                let column = self.lines[line as usize].chars().count() as u32;
+                CharPosition { line, column }
+            };
+            let semantic_token =
+                SemanticToken::new(start_position, end_position, self.last_start_position, ty);
+            self.last_start_position = start_position;
+            self.semantic_tokens.data.extend(semantic_token.iter());
+
+            start_position.line += 1;
+            start_position.column = 0;
+        }
     }
 
     fn handle_token(&mut self, token: erl_tokenize::Token) {
@@ -336,6 +361,12 @@ impl Highlighter {
     }
 }
 
+#[derive(Debug, Default, Clone, Copy)]
+struct CharPosition {
+    line: u32,   // 0 origin
+    column: u32, // 0 origin, UTF-16 based position
+}
+
 #[derive(Debug, Clone, Copy)]
 struct SemanticToken {
     pub delta_line: u32,
@@ -347,10 +378,12 @@ struct SemanticToken {
 
 impl SemanticToken {
     fn new(
-        token: &impl PositionRange,
-        last_position: TokenizePosition,
+        start_position: CharPosition,
+        end_position: CharPosition,
+        last_position: CharPosition,
         ty: SemanticTokenType,
     ) -> Self {
+        assert_eq!(start_position.line, end_position.line);
         let token_type = match ty {
             SemanticTokenType::Comment => 0,
             SemanticTokenType::String => 1,
@@ -365,16 +398,16 @@ impl SemanticToken {
             SemanticTokenType::Property => 10,
             _ => unreachable!(),
         };
-        let delta_line = (token.start_position().line() - last_position.line()) as u32;
+        let delta_line = (start_position.line - last_position.line) as u32;
         let delta_start = if delta_line == 0 {
-            (token.start_position().column() - last_position.column()) as u32
+            start_position.column - last_position.column
         } else {
-            token.start_position().column() as u32 - 1
+            start_position.column
         };
         Self {
             delta_line,
             delta_start,
-            length: (token.end_position().offset() - token.start_position().offset()) as u32,
+            length: end_position.column - start_position.column,
             token_type,
             token_modifiers: 0,
         }
