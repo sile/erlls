@@ -105,14 +105,14 @@ impl<FS: FileSystem> DocumentRepository<FS> {
 
     pub async fn resolve_module_uri(&mut self, module_name: &str) -> orfail::Result<DocumentUri> {
         if let Some(uri) = self.module_uri_cache.get(module_name) {
-            log::debug!("Module URI cache hit: module={}, uri={}", module_name, uri);
+            log::debug!("Module URI cache hit: module={module_name}, uri={uri}");
             return Ok(uri.clone());
         }
 
         let uri = self
             .config
             .root_uri
-            .join(&format!("src/{}.erl", module_name))
+            .join(&format!("src/{module_name}.erl"))
             .or_fail()?;
         if self.fs.exists(&uri).await {
             self.module_uri_cache
@@ -123,7 +123,7 @@ impl<FS: FileSystem> DocumentRepository<FS> {
         let uri = self
             .config
             .root_uri
-            .join(&format!("test/{}.erl", module_name))
+            .join(&format!("test/{module_name}.erl"))
             .or_fail()?;
         if self.fs.exists(&uri).await {
             self.module_uri_cache
@@ -139,7 +139,7 @@ impl<FS: FileSystem> DocumentRepository<FS> {
                 .or_fail()?;
             for app_dir_uri in self.fs.read_sub_dirs(&lib_uri).await {
                 let uri = app_dir_uri
-                    .join(&format!("src/{}.erl", module_name))
+                    .join(&format!("src/{module_name}.erl"))
                     .or_fail()?;
                 if self.fs.exists(&uri).await {
                     self.module_uri_cache
@@ -356,7 +356,7 @@ impl Text {
 impl std::fmt::Display for Text {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for line in self.lines.iter() {
-            writeln!(f, "{}", line)?;
+            writeln!(f, "{line}")?;
         }
         Ok(())
     }
