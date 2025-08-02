@@ -120,23 +120,23 @@ impl<'a> Highlighter<'a> {
     }
 
     fn add_semantic_token(&mut self, token: &impl PositionRange, ty: SemanticTokenType) {
-        let mut start_position = self.to_char_position(token.start_position());
-        let end_position = self.to_char_position(token.end_position());
-        while start_position.line <= end_position.line {
-            let end_position = if start_position.line == end_position.line {
-                end_position
+        let mut start = self.to_char_position(token.start_position());
+        let end = self.to_char_position(token.end_position());
+        while start.line <= end.line {
+            let current_end = if start.line == end.line {
+                end
             } else {
-                let line = start_position.line;
+                let line = start.line;
                 let column = self.lines[line as usize].encode_utf16().count() as u32;
                 CharPosition { line, column }
             };
             let semantic_token =
-                SemanticToken::new(start_position, end_position, self.last_start_position, ty);
-            self.last_start_position = start_position;
+                SemanticToken::new(start, current_end, self.last_start_position, ty);
+            self.last_start_position = start;
             self.semantic_tokens.data.extend(semantic_token.iter());
 
-            start_position.line += 1;
-            start_position.column = 0;
+            start.line += 1;
+            start.column = 0;
         }
     }
 
@@ -398,7 +398,7 @@ impl SemanticToken {
             SemanticTokenType::Property => 10,
             _ => unreachable!(),
         };
-        let delta_line = (start_position.line - last_position.line) as u32;
+        let delta_line = start_position.line - last_position.line;
         let delta_start = if delta_line == 0 {
             start_position.column - last_position.column
         } else {
