@@ -1103,20 +1103,17 @@ impl FindTarget for efmt_core::items::expressions::FunctionExpr {
         }
         if let Some(x) = self.function_name() {
             if self.contains_inclusive(position) {
-                if let Some(arity) = self.arity().and_then(|x| {
+                let arity = self.arity().and_then(|x| {
                     x.as_integer_token()
                         .and_then(|x| x.text(text).parse::<usize>().ok())
-                }) {
-                    return Some(Target::Function {
-                        position: x.start_position(),
-                        module_name: self.module_name().map(|x| x.value().to_owned()),
-                        function_name: x.value().to_owned(),
-                        arity,
-                        maybe_type: false,
-                    });
-                } else {
-                    return None;
-                }
+                })?;
+                return Some(Target::Function {
+                    position: x.start_position(),
+                    module_name: self.module_name().map(|x| x.value().to_owned()),
+                    function_name: x.value().to_owned(),
+                    arity,
+                    maybe_type: false,
+                });
             }
         }
         self.children()
