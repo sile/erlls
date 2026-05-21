@@ -365,46 +365,42 @@ impl<const ALLOW_PARTIAL_FAILURE: bool> FindHoverDoc
                             target_forms.push(form.get());
                             continue;
                         }
-                        efmt_core::items::forms::Form::Define(f) => {
+                        efmt_core::items::forms::Form::Define(f)
                             if matches!(target, Target::Macro { .. })
                                 && target.name() == f.macro_name()
                                 && (!check_arity || arity == f.variables().map(|x| x.len()))
-                            {
+                            => {
                                 target_forms.push(form.get());
                                 found = true;
                                 break;
                             }
-                        }
-                        efmt_core::items::forms::Form::FunDecl(f) => {
+                        efmt_core::items::forms::Form::FunDecl(f)
                             if matches!(target, Target::Function { .. })
                                 && f.clauses().next().is_some_and(|c| {
                                     target.name() == c.function_name().value()
                                         && (!check_arity || arity == Some(c.params().len()))
                                 })
-                            {
+                            => {
                                 found = true;
                                 break;
                             }
-                        }
-                        efmt_core::items::forms::Form::TypeDecl(f) => {
+                        efmt_core::items::forms::Form::TypeDecl(f)
                             if matches!(target, Target::Type { .. })
                                 && target.name() == f.type_name().value()
                                 && (!check_arity || arity == Some(f.params().len()))
-                            {
+                            => {
                                 target_forms.push(form.get());
                                 found = true;
                                 break;
                             }
-                        }
-                        efmt_core::items::forms::Form::RecordDecl(f) => {
+                        efmt_core::items::forms::Form::RecordDecl(f)
                             if matches!(target, Target::Record { .. })
                                 && target.name() == f.record_name().value()
-                            {
+                            => {
                                 target_forms.push(form.get());
                                 found = true;
                                 break;
                             }
-                        }
                         _ => {}
                     }
                     target_forms.clear();
